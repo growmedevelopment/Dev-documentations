@@ -160,7 +160,29 @@ Add:
 30 2 * * * /bin/bash ~/full_vultr_backup.sh daily >> ~/backup_daily.log 2>&1
 0 3 1 * * /bin/bash ~/full_vultr_backup.sh monthly >> ~/backup_monthly.log 2>&1
 ```
+---
 
+### 📄 Viewing Backup Logs
+
+To check the output of automated backups:
+
+#### ✅ Daily Backup Log
+
+```bash
+tail -n 50 ~/backup_daily.log
+```
+
+#### ✅ Monthly Backup Log
+
+```bash
+tail -n 50 ~/backup_monthly.log
+```
+
+Use `less`, `cat`, or `grep` to search through full logs:
+
+```bash
+less ~/backup_daily.log
+```
 ---
 
 ## 📘 INSTRUCTION 2: How to Restore a Backup
