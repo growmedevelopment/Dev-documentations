@@ -13,11 +13,16 @@ read -p "Backup Type (daily/weekly): " MODE
 read -p "Backup Date (YYYY-MM-DD or week-YYYY-VV): " DATE
 
 # === Determine Archive Filename ===
-if [[ "$MODE" == "weekly" ]]; then
+if [ "$MODE" = "weekly" ]; then
   ARCHIVE="${APP}_week-${DATE}.tar.gz"
+elif [ "$MODE" = "monthly" ]; then
+  ARCHIVE="${APP}_month-${DATE}.tar.gz"
+elif [ "$MODE" = "yearly" ]; then
+  ARCHIVE="${APP}_year-${DATE}.tar.gz"
 else
   ARCHIVE="${APP}_${DATE}.tar.gz"
 fi
+
 
 LOCAL="${BACKUP_DIR}/${MODE}/${ARCHIVE}"
 TMP="/tmp/restore_${APP}"
