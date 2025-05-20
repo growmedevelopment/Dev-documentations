@@ -102,51 +102,55 @@ s3 =
 Save this as `~/full_vultr_backup.sh`:
 
 ```bash
-#!/bin/bash
-MODE=$1
-WEBAPPS_DIR="/home/runcloud/webapps"
-BACKUP_DIR="/home/runcloud/backups/$MODE"
-VULTR_BUCKET="your-bucket-name"
-VULTR_ENDPOINT="https://your-region.vultrobjects.com"
-DATE=$(date +'%Y-%m-%d')
-MONTH=$(date +'%Y-%m')
-
-mkdir -p "$BACKUP_DIR"
-
-for APP in $(ls $WEBAPPS_DIR); do
-    APP_PATH="$WEBAPPS_DIR/$APP"
-    CONFIG="$APP_PATH/wp-config.php"
-    TMP="/tmp/${APP}_${MODE}_backup"
-    mkdir -p "$TMP"
-
-    if [ -f "$CONFIG" ]; then
-        DB_NAME=$(grep DB_NAME "$CONFIG" | cut -d \" -f2)
-        DB_USER=$(grep DB_USER "$CONFIG" | cut -d \" -f2)
-        DB_PASS=$(grep DB_PASSWORD "$CONFIG" | cut -d \" -f2)
-        mysqldump -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" > "$TMP/db.sql"
-    fi
-
-    cp -r "$APP_PATH" "$TMP/files"
-
-    if [ "$MODE" = "weekly" ]; then
-        WEEK=$(date +'%Y-%V') 
-        OUT="${APP}_week-${WEEK}.tar.gz"
-    else
-        OUT="${APP}_${DATE}.tar.gz"
-    fi
-
-    tar -czf "$BACKUP_DIR/$OUT" -C "$TMP" .
-    aws s3 cp "$BACKUP_DIR/$OUT" s3://$VULTR_BUCKET/$MODE/$OUT --endpoint-url "$VULTR_ENDPOINT"
-    rm -rf "$TMP"
-done
-
-# === CLEANUP OLD BACKUPS ===
-
-# Delete daily backups older than 7 days
-find /home/runcloud/backups/daily -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
-
-# Delete weekly backups older than 30 days
-find /home/runcloud/backups/weekly -type f -name "*.tar.gz" -mtime +30 -exec rm {} \;
+    #!/bin/bash
+    MODE=$1
+    WEBAPPS_DIR="/home/runcloud/webapps"
+    BACKUP_DIR="/home/runcloud/backups/$MODE"
+    VULTR_BUCKET="your-bucket-name"
+    VULTR_ENDPOINT="https://your-region.vultrobjects.com"
+    DATE=$(date +'%Y-%m-%d')
+    MONTH=$(date +'%Y-%m')
+    
+    mkdir -p "$BACKUP_DIR"
+    
+    for APP in $(ls $WEBAPPS_DIR); do
+        APP_PATH="$WEBAPPS_DIR/$APP"
+        CONFIG="$APP_PATH/wp-config.php"
+        TMP="/tmp/${APP}_${MODE}_backup"
+        mkdir -p "$TMP"
+    
+        if [ -f "$CONFIG" ]; then
+            DB_NAME=$(grep DB_NAME "$CONFIG" | cut -d \" -f2)
+            DB_USER=$(grep DB_USER "$CONFIG" | cut -d \" -f2)
+            DB_PASS=$(grep DB_PASSWORD "$CONFIG" | cut -d \" -f2)
+            mysqldump -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" > "$TMP/db.sql"
+        fi
+    
+        cp -r "$APP_PATH" "$TMP/files"
+    
+        if [ "$MODE" = "weekly" ]; then
+            WEEK=$(date +'%Y-%V') 
+            OUT="${APP}_week-${WEEK}.tar.gz"
+        else
+            OUT="${APP}_${DATE}.tar.gz"
+        fi
+    
+        tar -czf "$BACKUP_DIR/$OUT" -C "$TMP" .
+        aws s3 cp "$BACKUP_DIR/$OUT" s3://$VULTR_BUCKET/$MODE/$OUT --endpoint-url "$VULTR_ENDPOINT"
+        
+        echo "Uploaded $OUT to Vultr" >> ~/backup_upload.log
+        
+        rm -rf "$TMP"
+        rm -f "$BACKUP_DIR/$OUT"
+    done
+    
+    # === CLEANUP OLD BACKUPS ===
+    
+    # Delete daily backups older than 7 days
+    find /home/runcloud/backups/daily -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
+    
+    # Delete weekly backups older than 30 days
+    find /home/runcloud/backups/weekly -type f -name "*.tar.gz" -mtime +30 -exec rm {} \;
 
 ```
 
@@ -213,49 +217,71 @@ Restore:
 Save as `~/restore-backup.sh`:
 
 ```bash
-#!/bin/bash
-WEBAPPS_DIR="/home/runcloud/webapps"
-BACKUP_DIR="/home/runcloud/backups"
-VULTR_BUCKET="your-bucket-name"
-VULTR_ENDPOINT="https://your-region.vultrobjects.com"
+   #!/bin/bash
 
-read -p "App Name: " APP
-read -p "Backup Type (daily/weekly): " MODE
-read -p "Backup Date (YYYY-MM-DD): " DATE
-
-ARCHIVE="${APP}_${DATE}.tar.gz"
-LOCAL="${BACKUP_DIR}/${MODE}/${ARCHIVE}"
-TMP="/tmp/restore_${APP}"
-
-if [ ! -f "$LOCAL" ]; then
-    echo "Downloading from Vultr..."
-    mkdir -p "${BACKUP_DIR}/${MODE}"
-    aws s3 cp "s3://${VULTR_BUCKET}/${MODE}/${ARCHIVE}" "$LOCAL" --endpoint-url "$VULTR_ENDPOINT" || exit 1
-fi
-
-rm -rf "$TMP"
-mkdir -p "$TMP"
-tar -xzf "$LOCAL" -C "$TMP"
-
-APP_PATH="${WEBAPPS_DIR}/${APP}"
-mkdir -p "$APP_PATH"
-rm -rf "$APP_PATH"/*
-cp -r "$TMP/files/"* "$APP_PATH/"
-chown -R runcloud:runcloud "$APP_PATH"
-
-CONFIG="$APP_PATH/wp-config.php"
-if [ -f "$CONFIG" ]; then
-    DB_NAME=$(grep DB_NAME "$CONFIG" | cut -d \" -f2)
-    DB_USER=$(grep DB_USER "$CONFIG" | cut -d \" -f2)
-    DB_PASS=$(grep DB_PASSWORD "$CONFIG" | cut -d \" -f2)
-
-    if [ -f "$TMP/db.sql" ]; then
-        mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$TMP/db.sql"
+    WEBAPPS_DIR="/home/runcloud/webapps"
+    BACKUP_DIR="/home/runcloud/backups"
+    VULTR_BUCKET="your-bucket-name"
+    VULTR_ENDPOINT="https://your-region.vultrobjects.com"
+    
+    read -p "App Name: " APP
+    read -p "Backup Type (daily/weekly): " MODE
+    read -p "Backup Date (YYYY-MM-DD or week-YYYY-VV): " DATE
+    
+    if [[ "$MODE" == "weekly" ]]; then
+      ARCHIVE="${APP}_week-${DATE}.tar.gz"
+    else
+      ARCHIVE="${APP}_${DATE}.tar.gz"
     fi
-fi
-
-rm -rf "$TMP"
-echo "✅ Restore complete."
+    
+    LOCAL="${BACKUP_DIR}/${MODE}/${ARCHIVE}"
+    TMP="/tmp/restore_${APP}"
+    
+    # Download from Vultr if not found locally
+    if [ ! -f "$LOCAL" ]; then
+        echo "📡 Downloading $ARCHIVE from Vultr..."
+        mkdir -p "${BACKUP_DIR}/${MODE}"
+        aws s3 cp "s3://${VULTR_BUCKET}/${MODE}/${ARCHIVE}" "$LOCAL" --endpoint-url "$VULTR_ENDPOINT" || {
+            echo "❌ Failed to download backup from Vultr."
+            exit 1
+        }
+    fi
+    
+    # Extract archive
+    echo "📦 Extracting archive..."
+    rm -rf "$TMP"
+    mkdir -p "$TMP"
+    tar -xzf "$LOCAL" -C "$TMP"
+    
+    # Restore files
+    APP_PATH="${WEBAPPS_DIR}/${APP}"
+    echo "📁 Restoring files to $APP_PATH..."
+    mkdir -p "$APP_PATH"
+    rm -rf "$APP_PATH"/*
+    cp -r "$TMP/files/"* "$APP_PATH/"
+    chown -R runcloud:runcloud "$APP_PATH"
+    
+    # Restore database
+    CONFIG="$APP_PATH/wp-config.php"
+    if [ -f "$CONFIG" ]; then
+        DB_NAME=$(grep DB_NAME "$CONFIG" | cut -d \" -f2)
+        DB_USER=$(grep DB_USER "$CONFIG" | cut -d \" -f2)
+        DB_PASS=$(grep DB_PASSWORD "$CONFIG" | cut -d \" -f2)
+    
+        if [ -f "$TMP/db.sql" ]; then
+            echo "🗃️ Importing database..."
+            mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$TMP/db.sql" && \
+            echo "✅ Database restored."
+        else
+            echo "⚠️ No database dump found. Files restored only."
+        fi
+    else
+        echo "⚠️ wp-config.php not found. Skipping database restore."
+    fi
+    
+    # Cleanup
+    rm -rf "$TMP"
+    echo "✅ Restore complete for $APP from $MODE backup dated $DATE."
 ```
 
 Make it executable:
