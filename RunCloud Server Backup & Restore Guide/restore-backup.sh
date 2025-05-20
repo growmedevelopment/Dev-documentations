@@ -65,4 +65,6 @@ fi
 
 # === Final Cleanup ===
 rm -rf "$TMP"
+rm -f "$LOCAL"
+echo "🧹 Deleted local archive $LOCAL"
 echo "✅ Restore complete for $APP from $MODE backup dated $DATE."
