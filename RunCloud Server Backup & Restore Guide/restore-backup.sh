@@ -38,7 +38,7 @@
     APP_PATH="${WEBAPPS_DIR}/${APP}"
     echo "📁 Restoring files to $APP_PATH..."
     mkdir -p "$APP_PATH"
-    rm -rf "$APP_PATH"/*
+    rm -rf "${APP_PATH:?}"/*
     cp -r "$TMP/files/"* "$APP_PATH/"
     chown -R runcloud:runcloud "$APP_PATH"
 

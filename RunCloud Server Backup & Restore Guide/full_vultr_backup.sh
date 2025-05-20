@@ -5,12 +5,13 @@
     VULTR_BUCKET="runcloud-app-backups"
     VULTR_ENDPOINT="https://sjc1.vultrobjects.com"
     DATE=$(date +'%Y-%m-%d')
-    MONTH=$(date +'%Y-%m')
+    WEEK=$(date +'%Y-%V')
 
     mkdir -p "$BACKUP_DIR"
 
 
-    for APP in $(ls $WEBAPPS_DIR); do
+    for APP_PATH in "$WEBAPPS_DIR"/*; do
+        APP=$(basename "$APP_PATH")
         APP_PATH="$WEBAPPS_DIR/$APP"
         CONFIG="$APP_PATH/wp-config.php"
         TMP="/tmp/${APP}_${MODE}_backup"
@@ -26,7 +27,7 @@
         cp -r "$APP_PATH" "$TMP/files"
 
         if [ "$MODE" = "weekly" ]; then
-            WEEK=$(date +'%Y-%V')
+
             OUT="${APP}_week-${WEEK}.tar.gz"
         else
             OUT="${APP}_${DATE}.tar.gz"
