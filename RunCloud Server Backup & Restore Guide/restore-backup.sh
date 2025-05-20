@@ -26,7 +26,7 @@ TMP="/tmp/restore_${APP}"
 if [ ! -f "$LOCAL" ]; then
   echo "📡 Downloading $ARCHIVE from Vultr..."
   mkdir -p "${BACKUP_DIR}/${MODE}"
-  aws s3 cp "s3://${VULTR_BUCKET}/${MODE}/${ARCHIVE}" "$LOCAL" --endpoint-url "$VULTR_ENDPOINT" || {
+  aws s3 cp "s3://${VULTR_BUCKET}/${MODE}/${APP}/${ARCHIVE}" "$LOCAL" --endpoint-url "$VULTR_ENDPOINT" || {
     echo "❌ Failed to download backup from Vultr."
     exit 1
   }

@@ -55,7 +55,7 @@ for APP_PATH in "$WEBAPPS_DIR"/*; do
 
 
     # Upload to Vultr Object Storage
-    if aws s3 cp "$BACKUP_DIR/$OUT" "s3://$VULTR_BUCKET/$MODE/$OUT" --endpoint-url "$VULTR_ENDPOINT"; then
+    if aws s3 cp "$BACKUP_DIR/$OUT" "s3://$VULTR_BUCKET/$MODE/$APP/$OUT" --endpoint-url "$VULTR_ENDPOINT"; then
         # Log successful upload
         echo "Uploaded $OUT to Vultr" >> ~/backup_upload.log
 
