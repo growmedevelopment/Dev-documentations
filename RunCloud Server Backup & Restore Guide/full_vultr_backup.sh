@@ -13,6 +13,8 @@ VULTR_ENDPOINT="https://sjc1.vultrobjects.com"
 # Date identifiers for filenames
 DATE=$(date +'%Y-%m-%d')
 WEEK=$(date +'%Y-%V')  # Year-week number for weekly naming
+MONTH=$(date +'%Y-%m')
+YEAR=$(date +'%Y')
 
 # Ensure backup directory exists
 mkdir -p "$BACKUP_DIR"
@@ -40,6 +42,10 @@ for APP_PATH in "$WEBAPPS_DIR"/*; do
     # Determine the backup filename
     if [ "$MODE" = "weekly" ]; then
         OUT="${APP}_week-${WEEK}.tar.gz"
+    elif [ "$MODE" = "monthly" ]; then
+        OUT="${APP}_month-${MONTH}.tar.gz"
+    elif [ "$MODE" = "yearly" ]; then
+        OUT="${APP}_year-${YEAR}.tar.gz"
     else
         OUT="${APP}_${DATE}.tar.gz"
     fi
@@ -68,3 +74,9 @@ find /home/runcloud/backups/daily -type f -name "*.tar.gz" -mtime +7 -exec rm {}
 
 # Delete weekly backups older than 30 days
 find /home/runcloud/backups/weekly -type f -name "*.tar.gz" -mtime +30 -exec rm {} \;
+
+# Delete monthly backups older than 12 months
+find /home/runcloud/backups/monthly -type f -name "*.tar.gz" -mtime +365 -exec rm {} \;
+
+# Delete yearly backups older than 5 years
+find /home/runcloud/backups/yearly -type f -name "*.tar.gz" -mtime +1825 -exec rm {} \;
