@@ -6,7 +6,7 @@
 ### 🔧 Overview
 
 This guide shows you how to:
-- Create full **daily and monthly backups** for all WordPress apps on a RunCloud server
+- Create full **daily and weekly backups** for all WordPress apps on a RunCloud server
 - Upload them to **Vultr Object Storage**
 - Set up automated scheduling with **cron**
 
@@ -128,8 +128,9 @@ for APP in $(ls $WEBAPPS_DIR); do
 
     cp -r "$APP_PATH" "$TMP/files"
 
-    if [ "$MODE" = "monthly" ]; then
-        OUT="${APP}_${MONTH}.tar.gz"
+    if [ "$MODE" = "weekly" ]; then
+        WEEK=$(date +'%Y-%V') 
+        OUT="${APP}_week-${WEEK}.tar.gz"
     else
         OUT="${APP}_${DATE}.tar.gz"
     fi
@@ -139,9 +140,13 @@ for APP in $(ls $WEBAPPS_DIR); do
     rm -rf "$TMP"
 done
 
-find /home/runcloud/backups/daily -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
-find /home/runcloud/backups/monthly -type f -name "*.tar.gz" -mtime +30 -exec rm {} \;
+# === CLEANUP OLD BACKUPS ===
 
+# Delete daily backups older than 7 days
+find /home/runcloud/backups/daily -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
+
+# Delete weekly backups older than 30 days
+find /home/runcloud/backups/weekly -type f -name "*.tar.gz" -mtime +30 -exec rm {} \;
 
 ```
 
@@ -163,7 +168,7 @@ Add:
 
 ```bash
 30 2 * * * /bin/bash ~/full_vultr_backup.sh daily >> ~/backup_daily.log 2>&1
-0 3 1 * * /bin/bash ~/full_vultr_backup.sh monthly >> ~/backup_monthly.log 2>&1
+0 3 1 * * /bin/bash ~/full_vultr_backup.sh weekly >> ~/backup_weekly.log 2>&1
 ```
 ---
 
@@ -177,10 +182,10 @@ To check the output of automated backups:
 tail -n 50 ~/backup_daily.log
 ```
 
-#### ✅ Monthly Backup Log
+#### ✅ Weekly Backup Log
 
 ```bash
-tail -n 50 ~/backup_monthly.log
+tail -n 50 ~/backup_weekly.log
 ```
 
 Use `less`, `cat`, or `grep` to search through full logs:
@@ -215,7 +220,7 @@ VULTR_BUCKET="your-bucket-name"
 VULTR_ENDPOINT="https://your-region.vultrobjects.com"
 
 read -p "App Name: " APP
-read -p "Backup Type (daily/monthly): " MODE
+read -p "Backup Type (daily/weekly): " MODE
 read -p "Backup Date (YYYY-MM-DD): " DATE
 
 ARCHIVE="${APP}_${DATE}.tar.gz"
