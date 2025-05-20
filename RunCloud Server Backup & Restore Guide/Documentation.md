@@ -108,6 +108,7 @@ Make it executable:
 chmod +x ~/full_vultr_backup.sh
 ```
 
+
 ---
 
 #### 3. Automate with Cron
@@ -119,12 +120,35 @@ crontab -e
 Add:
 
 ```bash
+# Run daily backup at 2:30 AM every day
 30 2 * * * /bin/bash ~/full_vultr_backup.sh daily >> ~/backup_daily.log 2>&1
-0 3 1 * * /bin/bash ~/full_vultr_backup.sh weekly >> ~/backup_weekly.log 2>&1
+
+# Run weekly backup at 3:00 AM every Sunday
+0 3 * * 0 /bin/bash ~/full_vultr_backup.sh weekly >> ~/backup_weekly.log 2>&1
+
+# Run monthly backup at 3:00 AM on the 1st of each month
 0 3 1 * * /bin/bash ~/full_vultr_backup.sh monthly >> ~/backup_monthly.log 2>&1
+
+# Run yearly backup at 3:00 AM on January 1st
 0 3 1 1 * /bin/bash ~/full_vultr_backup.sh yearly >> ~/backup_yearly.log 2>&1
 ```
 ---
+
+
+---
+
+### ✅ How to Use
+
+```bash
+./full_vultr_backup.sh [mode]
+```
+
+Where [mode] can be one of:
+•	daily
+•	weekly
+•	monthly
+•	yearly
+
 
 ### 📄 Viewing Backup Logs
 
