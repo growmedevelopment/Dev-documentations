@@ -138,6 +138,11 @@ for APP in $(ls $WEBAPPS_DIR); do
     aws s3 cp "$BACKUP_DIR/$OUT" s3://$VULTR_BUCKET/$MODE/$OUT --endpoint-url "$VULTR_ENDPOINT"
     rm -rf "$TMP"
 done
+
+find /home/runcloud/backups/daily -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
+find /home/runcloud/backups/monthly -type f -name "*.tar.gz" -mtime +30 -exec rm {} \;
+
+
 ```
 
 Make it executable:
