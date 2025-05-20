@@ -6,7 +6,7 @@
 ### 🔧 Overview
 
 This guide shows you how to:
-- Create full **daily and weekly backups** for all WordPress apps on a RunCloud server
+- Create full **daily, weekly, monthly, and yearly backups** for all WordPress apps on a RunCloud server
 - Upload them to **Vultr Object Storage**
 - Set up automated scheduling with **cron**
 
@@ -121,6 +121,8 @@ Add:
 ```bash
 30 2 * * * /bin/bash ~/full_vultr_backup.sh daily >> ~/backup_daily.log 2>&1
 0 3 1 * * /bin/bash ~/full_vultr_backup.sh weekly >> ~/backup_weekly.log 2>&1
+0 3 1 * * /bin/bash ~/full_vultr_backup.sh monthly >> ~/backup_monthly.log 2>&1
+0 3 1 1 * /bin/bash ~/full_vultr_backup.sh yearly >> ~/backup_yearly.log 2>&1
 ```
 ---
 
@@ -138,6 +140,18 @@ tail -n 50 ~/backup_daily.log
 
 ```bash
 tail -n 50 ~/backup_weekly.log
+```
+
+#### ✅ Monthly Backup Log
+
+```bash
+tail -n 50 ~/backup_monthly.log
+```
+
+#### ✅ Yearly Backup Log
+
+```bash
+tail -n 50 ~/backup_yearly.log
 ```
 
 Use `less`, `cat`, or `grep` to search through full logs:
