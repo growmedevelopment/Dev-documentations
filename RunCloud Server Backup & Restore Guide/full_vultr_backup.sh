@@ -47,15 +47,18 @@ for APP_PATH in "$WEBAPPS_DIR"/*; do
     # Archive the backup
     tar -czf "$BACKUP_DIR/$OUT" -C "$TMP" .
 
+
     # Upload to Vultr Object Storage
-    aws s3 cp "$BACKUP_DIR/$OUT" "s3://$VULTR_BUCKET/$MODE/$OUT" --endpoint-url "$VULTR_ENDPOINT"
+    if aws s3 cp "$BACKUP_DIR/$OUT" "s3://$VULTR_BUCKET/$MODE/$OUT" --endpoint-url "$VULTR_ENDPOINT"; then
+        # Log successful upload
+        echo "Uploaded $OUT to Vultr" >> ~/backup_upload.log
 
-    # Log successful upload
-    echo "Uploaded $OUT to Vultr" >> ~/backup_upload.log
-
-    # Clean up temporary and local files
-    rm -rf "$TMP"
-    rm -f "$BACKUP_DIR/$OUT"
+        # Clean up temporary and local files
+        rm -rf "$TMP"
+        rm -f "$BACKUP_DIR/$OUT"
+    else
+        echo "❌ Upload failed for $OUT" >> ~/backup_upload.log
+    fi
 done
 
 # === CLEANUP OLD BACKUPS ===
