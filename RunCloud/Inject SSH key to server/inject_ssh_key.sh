@@ -1,5 +1,16 @@
+# Load environment variables from .env file two levels up
+ENV_FILE="$(dirname "$0")/../../.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  echo "❌ .env file not found at $ENV_FILE"
+  exit 1
+fi
+
 #!/bin/bash
-API_KEY="-------------API_KEY--------------------"
+
 
 page=1
 
@@ -28,9 +39,9 @@ while :; do
       --header "Authorization: Bearer $API_KEY" \
       --header "Content-Type: application/json" \
       --data-raw '{
-          "label": "dmytro-growMe",
+          "label": "----growMe---------",
           "username": "root",
-          "publicKey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDESt9IxqVMNMpDL5vzG/16HWpx4rru+IKQ4ORkhYZy+CngGikolEBaxlZPRO73lq/naqRb1bM5yDfHOvKD6tGkG5A19bQSYKco9PLALQBLNtj8hELmLpqzU7DscgPiTUzveFfYrF3N/2uA203AQJCkNkC4QtNiINrFHw5zNrT7vy5qdLAZmo29gP5tqetDnvEnVmb0T30vN4xy2KLnsTa1iij0cYbMzQ1jKxIJB2kuCniZs6/O4HXN4RSyuLWdEdkfErNQE+nyNL1Qqn9ppFVQcXvM0GQUKK+SBgZLUhy7BfnO79eqw7VxI08ExkP0PJY31PGoUgb9Fpunukn3ZjFMZa4vG36Snagzy1GVDrOBo180iJ8QLoaQIW149gQdl930oMaLZlCzkCBxDEMJChMcieFGgCdBeEHus4AiZUG7B2gl3uYINTSKzci0hRHFBpQbx134TjQt+YwxiNSgH8uHeGceFAv/pzREvNzrvBvys748DijYnTI97nuUmPiThPM= dmytro@DESKTOP-RMU280C",
+          "publicKey": "------------publicKey----------",
           "temporary": false
       }'
     )

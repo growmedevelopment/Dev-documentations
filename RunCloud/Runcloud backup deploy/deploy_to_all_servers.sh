@@ -1,9 +1,18 @@
+# Load environment variables from .env file two levels up
+ENV_FILE="$(dirname "$0")/../../.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  echo "❌ .env file not found at $ENV_FILE"
+  exit 1
+fi
+
 #!/bin/bash
 
 # === Configuration ===
 PUBLIC_KEY_PATH="$HOME/.ssh/id_ed25519.pub"
-NOTIFY_EMAIL="development@growme.ca"
-API_KEY="-----API_KEY------"
 
 
 if [ ! -f "$PUBLIC_KEY_PATH" ]; then
