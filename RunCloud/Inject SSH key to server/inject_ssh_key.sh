@@ -1,6 +1,5 @@
 #!/bin/bash
-#//todo remove key
-API_KEY="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ3b3Jrc3BhY2VfaWQiOjk4NDg0LCJleHAiOjE3NTA0NDU4MTYsInVzZXJfaWQiOjk4NDg5LCJ1bmlxdWVfaWRlbnRpZmllciI6IjA4ZjZiY2Y1LTZmZmItNDA4My1hNDBjLWM1M2NiZmQ3ZTkwZiJ9.nOq07e2cM4lIX41DAK7ykxQdTKuyEmNIy8MfARt2F14"
+API_KEY="-------------API_KEY--------------------"
 
 page=1
 
