@@ -21,7 +21,7 @@ SSHChecker/
 Run the script from the `ssh-checker` root directory:
 
 ```bash
-  ./check_ssh_access.sh
+   /opt/homebrew/bin/bash "/Users/user/----path-to-project/RunCloud/SSHChecker/check_ssh_access.sh
 ```
 
 You will see a list of all servers with the following columns:
