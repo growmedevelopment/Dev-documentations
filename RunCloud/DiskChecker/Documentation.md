@@ -8,7 +8,7 @@ This script monitors disk usage across all RunCloud-managed servers. It connects
 
 - **Script Name:** `check_disk_usage_all_servers.sh`
 - **Location:**  
-  `/Users/dmytrokovalenko/Documents/Projects/Growme/Dev-documentations/check_disk_usage_all_servers.sh`
+  `/Users/user/pathToProject/check_disk_usage_all_servers.sh`
 
 ---
 
@@ -69,12 +69,12 @@ Then secure it:
 Run the script using:
 
 ```bash 
-    /opt/homebrew/bin/bash /Users/dmytrokovalenko/Documents/Projects/Growme/Dev-documentations/check_disk_usage_all_servers.sh
+    /opt/homebrew/bin/bash /Users/user/pathToProject/check_disk_usage_all_servers.sh
 ```
 ---
 ## ⏱️ Cron Setup for Daily Execution (at 9 AM)
 ```bash
-  0 9 * * * /opt/homebrew/bin/bash /Users/dmytrokovalenko/Documents/Projects/Growme/Dev-documentations/check_disk_usage_all_servers.sh > /dev/null 2>&1
+  0 9 * * * /opt/homebrew/bin/bash /Users/user/pathToProject/check_disk_usage_all_servers.sh > /dev/null 2>&1
 ```
 ---
 ## 📧 HTML Report Includes
