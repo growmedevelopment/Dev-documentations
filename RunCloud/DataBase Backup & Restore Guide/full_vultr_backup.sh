@@ -1,6 +1,29 @@
 #!/bin/bash
 set -euo pipefail
 
+# --- CONFIGURATION (edit these for your needs) ---
+ADMIN_EMAIL="development@growme.ca, dmytro@growme.ca, aziz@growme.ca"
+MIN_FREE_SPACE_MB=2048
+DISK_PATH="/"  # Path to check disk space (usually root)
+
+# --- Check if mail command exists; install if missing ---
+if ! command -v mail >/dev/null 2>&1; then
+  echo "mail command not found. Installing mailutils..."
+  sudo apt update && sudo apt install mailutils -y
+fi
+
+# --- Check disk space before running backup ---
+AVAILABLE_MB=$(df -m "$DISK_PATH" | awk 'NR==2 {print $4}')
+if [ "$AVAILABLE_MB" -lt "$MIN_FREE_SPACE_MB" ]; then
+  echo "Not enough disk space. Only ${AVAILABLE_MB}MB available, required: ${MIN_FREE_SPACE_MB}MB."
+
+  # Optional: email alert
+  echo -e "🚨 Backup aborted on $(hostname) at $(date)\n\nOnly ${AVAILABLE_MB}MB available on ${DISK_PATH}, required: ${MIN_FREE_SPACE_MB}MB.\n\nCheck disk usage with:\n\n  df -h\n" \
+    | mail -s "⚠️ Backup Failed - Low Disk Space on $(hostname)" "$ADMIN_EMAIL"
+
+  exit 1
+fi
+
 # Backup mode: either "daily" or "weekly"
 MODE=$1
 
@@ -33,7 +56,12 @@ for APP_PATH in "$WEBAPPS_DIR"/*; do
         DB_PASS=$(grep "DB_PASSWORD" "$CONFIG" | sed "s/.*'\\(.*\\)'.*/\\1/")
 
         # Dump the database
-        mysqldump -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" > "$TMP/db.sql"
+        mysqldump -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" > "$TMP/db.sql" || {
+            echo "❌ mysqldump failed for $APP" >> ~/backup_upload.log
+            echo -e "🚨 mysqldump failed for $APP on $(hostname) at $(date)\n\nCheck disk space and database access.\n" \
+              | mail -s "⚠️ Backup Failed - mysqldump error on $(hostname)" "$ADMIN_EMAIL"
+            continue
+        }
     fi
 
     # Copy all files from the app directory

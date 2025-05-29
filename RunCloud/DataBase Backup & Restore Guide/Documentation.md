@@ -1,5 +1,4 @@
-
-# 🛡️ RunCloud Server Backup & Restore Guide
+<file name=0 path=Documentation.md># 🛡️ RunCloud Server Backup & Restore Guide
 
 ## 📘 INSTRUCTION 1: How to Set Up Automated Backups
 
@@ -11,6 +10,8 @@ This guide shows you how to:
 - Set up automated scheduling with **cron**
 
 ---
+
+This script already includes checks for low disk space, automatic installation of mail utilities, and email notifications for errors
 
 ### ✅ Prerequisites
 
@@ -63,8 +64,8 @@ Make it executable:
   chmod +x ~/full_vultr_backup.sh
 ```
 
-
 ---
+
 
 #### 3. Automate with Cron
 
