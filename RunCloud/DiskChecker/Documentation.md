@@ -69,7 +69,7 @@ Then secure it:
 Run the script using:
 
 ```bash 
-    /opt/homebrew/bin/bash /Users/user/pathToProject/check_disk_usage_all_servers.sh
+    /opt/homebrew/bin/bash /Users/---user---/---path-to-project---/RunCloud/DiskChecker/check_disk_usage_all_servers.sh
 ```
 ---
 ## ⏱️ Cron Setup for Daily Execution (at 9 AM)
