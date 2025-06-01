@@ -27,8 +27,8 @@ s3 =
 EOF
 
 # === 2b. Verify AWS CLI configuration ===
-if ! aws sts get-caller-identity --endpoint-url https://sjc1.vultrobjects.com > /dev/null 2>&1; then
-  echo "❌ AWS CLI not properly configured. Aborting."
+if ! aws s3 ls --endpoint-url https://sjc1.vultrobjects.com > /dev/null 2>&1; then
+  echo "❌ AWS CLI not properly configured or unable to connect to Vultr Object Storage."
   exit 1
 fi
 echo "✅ AWS CLI configured and authenticated."
@@ -67,11 +67,11 @@ systemctl restart postfix
 echo "✅ Postfix relay configured."
 
 # === 4. Write full_vultr_backup.sh ===
-cat > /root/full_vultr_backup.sh <<EOS
+cat > /root/full_vultr_backup.sh <<'EOS'
 #!/bin/bash
 set -euo pipefail
 
-ADMIN_EMAIL="$ADMIN_EMAIL"
+ADMIN_EMAIL="${BACKUP_ADMIN_EMAIL:-root@localhost}"
 MIN_FREE_SPACE_MB=2048
 DISK_PATH="/"
 LOG_FILE="/root/backup_failure.log"
@@ -154,13 +154,68 @@ main() {
     fi
   done
 }
+
+# === Remote Cleanup on Vultr ===
+case "$MODE" in
+  daily)   RETENTION_DAYS=7 ;;
+  weekly)  RETENTION_DAYS=30 ;;
+  monthly) RETENTION_DAYS=365 ;;
+  yearly)  RETENTION_DAYS=1825 ;;
+  *)       RETENTION_DAYS=0 ;;
+esac
+
+CUTOFF_DATE=$(date -d "-$RETENTION_DAYS days" +%s)
+
+# List all apps in the bucket
+APPS=$(aws s3 ls "s3://$VULTR_BUCKET/" --endpoint-url "$VULTR_ENDPOINT" | awk '{print $2}' | sed 's#/##')
+
+for APP in $APPS; do
+  echo "🧹 Checking old backups for app: $APP"
+
+  aws s3 ls "s3://$VULTR_BUCKET/$APP/$MODE/" --endpoint-url "$VULTR_ENDPOINT" | while read -r line; do
+    FILE_DATE=$(echo "$line" | awk '{print $1}')
+    FILE_NAME=$(echo "$line" | awk '{for (i=4; i<=NF; i++) printf $i" "; print ""}' | xargs)
+
+    # Skip lines that don't have expected structure
+    if [[ -z "$FILE_NAME" || "$FILE_NAME" == "/" ]]; then
+      continue
+    fi
+
+    FILE_TIMESTAMP=$(date -d "$FILE_DATE" +%s)
+
+    if [ "$FILE_TIMESTAMP" -lt "$CUTOFF_DATE" ]; then
+      echo "🧹 Deleting remote backup: $APP/$MODE/$FILE_NAME"
+      aws s3 rm "s3://$VULTR_BUCKET/$APP/$MODE/$FILE_NAME" --endpoint-url "$VULTR_ENDPOINT"
+    fi
+  done
+done
+
+
+# === CLEANUP OLD BACKUPS ===
+
+# Delete daily backups older than 7 days
+find /home/runcloud/backups/daily -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
+
+# Delete weekly backups older than 30 days
+find /home/runcloud/backups/weekly -type f -name "*.tar.gz" -mtime +30 -exec rm {} \;
+
+# Delete monthly backups older than 12 months
+find /home/runcloud/backups/monthly -type f -name "*.tar.gz" -mtime +365 -exec rm {} \;
+
+# Delete yearly backups older than 5 years
+find /home/runcloud/backups/yearly -type f -name "*.tar.gz" -mtime +1825 -exec rm {} \;
+
+}
+
 [[ "${BASH_SOURCE[0]}" == "$0" ]] && main "$@"
+
+
 EOS
 
 chmod +x /root/full_vultr_backup.sh
 
 # === 5. Write check_alive.sh ===
-cat > /root/check_alive.sh <<EOC
+cat > /root/check_alive.sh <<'EOC'
 #!/bin/bash
 set -e
 PING_HOST="8.8.8.8"

@@ -25,8 +25,30 @@ if [ ! -f "$DEPLOY_SCRIPT" ]; then
   exit 1
 fi
 
-# === Pagination and Server Processing ===
+# === Count total servers before deployment ===
+total_servers=0
 page=1
+while :; do
+  response=$(curl -s --location --request GET "https://manage.runcloud.io/api/v3/servers?page=$page" \
+    --header "Authorization: Bearer $API_KEY" \
+    --header "Accept: application/json" \
+    --header "Content-Type: application/json")
+
+  count=$(echo "$response" | jq '.data | length')
+  ((total_servers += count))
+
+  next=$(echo "$response" | jq -r '.meta?.pagination?.links?.next // empty')
+  if [[ -z "$next" ]]; then
+    break
+  fi
+  ((page++))
+done
+
+echo "📊 Found $total_servers servers total."
+
+# === Start deployment ===
+page=1
+current_server=0
 while :; do
   response=$(curl -s --location --request GET "https://manage.runcloud.io/api/v3/servers?page=$page" \
     --header "Authorization: Bearer $API_KEY" \
@@ -39,10 +61,11 @@ while :; do
   fi
 
   echo "$response" | jq -c '.data[]' | while read -r server; do
+    ((current_server++))
     ip=$(echo "$server" | jq -r '.ipAddress')
     name=$(echo "$server" | jq -r '.name')
 
-    echo "🔍 Checking availability of $name ($ip)..."
+    echo "🔍 [$current_server/$total_servers] Checking availability of $name ($ip)..."
     if ! ping -c 2 -W 2 "$ip" > /dev/null; then
       echo "❌ $name ($ip) is offline."
       if command -v mail >/dev/null; then
@@ -62,8 +85,8 @@ while :; do
        bash -s" < "$DEPLOY_SCRIPT"
   done
 
-  next=$(echo "$response" | jq -r '.meta.pagination.links.next')
-  if [[ "$next" == "null" || -z "$next" ]]; then
+  next=$(echo "$response" | jq -r '.meta?.pagination?.links?.next // empty')
+  if [[ -z "$next" ]]; then
     break
   fi
 
