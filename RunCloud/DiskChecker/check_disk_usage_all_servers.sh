@@ -125,9 +125,9 @@ EOF
       used_color="N/A"
     fi
     echo "✅ $name: IP: $internal_ip, Total: $total_disk GB, Used: $used_disk GB, Unallocated: $unallocated GB"
-    # Highlight row if unallocated space is present and nonzero
+    # Highlight row if unallocated space is present and greater than 1
     row_class=""
-    if [[ "$unallocated" =~ ^[0-9]+(\.[0-9]+)?$ && "$unallocated" != "0.0" && "$unallocated" != "0" ]]; then
+    if [[ "$unallocated" =~ ^[0-9]+(\.[0-9]+)?$ && $(awk "BEGIN {print ($unallocated > 1) ? 1 : 0}") -eq 1 ]]; then
       row_class=" style='background-color: #ffd6d6;'"
     fi
     echo "<tr${row_class}><td>$count</td><td>$name</td><td>$internal_ip</td><td>$total_disk</td><td>Used: $used_color</td><td>$unallocated</td></tr>" >> "$HTML_REPORT_FILE"
