@@ -60,7 +60,7 @@ while :; do
     exit 1
   fi
 
-  echo "$response" | jq -c '.data[]' | while read -r server; do
+  while IFS= read -r server; do
     ((current_server++))
     ip=$(echo "$server" | jq -r '.ipAddress')
     name=$(echo "$server" | jq -r '.name')
@@ -83,7 +83,7 @@ while :; do
        BACKUP_ADMIN_EMAIL='$NOTIFY_EMAIL' \
        HEALTHCHECK_ALERT_EMAIL='$NOTIFY_EMAIL' \
        bash -s" < "$DEPLOY_SCRIPT"
-  done
+  done < <(echo "$response" | jq -c '.data[]')
 
   next=$(echo "$response" | jq -r '.meta?.pagination?.links?.next // empty')
   if [[ -z "$next" ]]; then
