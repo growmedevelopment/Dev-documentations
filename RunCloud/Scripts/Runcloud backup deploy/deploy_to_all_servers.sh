@@ -12,9 +12,8 @@ else
 fi
 
 # === SSH Key Check ===
-PUBLIC_KEY_PATH="$HOME/.ssh/id_ed25519.pub"
-if [ ! -f "$PUBLIC_KEY_PATH" ]; then
-  echo "❌ SSH key not found at $PUBLIC_KEY_PATH"
+if [ ! -f "$SSH_PUBLIC_KEY" ]; then
+  echo "❌ SSH key not found at $SSH_PUBLIC_KEY"
   exit 1
 fi
 

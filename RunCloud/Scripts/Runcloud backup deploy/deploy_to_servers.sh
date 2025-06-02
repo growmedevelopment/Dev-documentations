@@ -12,9 +12,9 @@ else
 fi
 
 # === SSH Key Check ===
-PUBLIC_KEY_PATH="$HOME/.ssh/id_ed25519.pub"
-if [ ! -f "$PUBLIC_KEY_PATH" ]; then
-  echo "❌ SSH key not found at $PUBLIC_KEY_PATH"
+
+if [ ! -f "$SSH_PUBLIC_KEY" ]; then
+  echo "❌ SSH key not found at $SSH_PUBLIC_KEY"
   exit 1
 fi
 
@@ -59,5 +59,12 @@ for ip in "${SERVER_LIST[@]}"; do
 
   echo "✅ $ip is online. Deploying..."
 
-  ssh -o StrictHostKeyChecking=no root@"$ip" 'bash -s' < "$DEPLOY_SCRIPT"
+  ssh -o StrictHostKeyChecking=no root@"$ip" \
+    "AWS_ACCESS_KEY_ID='$AWS_ACCESS_KEY_ID' \
+     AWS_SECRET_ACCESS_KEY='$AWS_SECRET_ACCESS_KEY' \
+     SMTP_RELAY_USER='$RELAY_USER' \
+     SMTP_RELAY_PASS='$RELAY_PASS' \
+     BACKUP_ADMIN_EMAIL='$NOTIFY_EMAIL' \
+     HEALTHCHECK_ALERT_EMAIL='$NOTIFY_EMAIL' \
+     bash -s" < "$DEPLOY_SCRIPT"
 done

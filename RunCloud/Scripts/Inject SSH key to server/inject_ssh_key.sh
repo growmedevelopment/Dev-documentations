@@ -35,16 +35,19 @@ while :; do
 
   echo "$response" | jq -c '.data[]' | while read -r row; do
     server_id=$(echo "$row" | jq -r '.id')
-    ssh_response=$(curl -s --location -g --request POST "https://manage.runcloud.io/api/v3/servers/$server_id/ssh/credentials" \
+
+    ssh_response=$(curl -s --location --request POST \
+      "https://manage.runcloud.io/api/v3/servers/$server_id/ssh/credentials" \
       --header "Authorization: Bearer $API_KEY" \
       --header "Content-Type: application/json" \
-      --data-raw '{
-          "label": "----growMe---------",
-          "username": "root",
-          "publicKey": "------------publicKey----------",
-          "temporary": false
-      }'
+      --data-raw "{
+        \"label\": \"$SSH_KEY_NAME\",
+        \"username\": \"root\",
+        \"publicKey\": \"$SSH_PUBLIC_KEY\",
+        \"temporary\": false
+      }"
     )
+
     echo "Injected SSH key for server ID: $server_id - Response: $ssh_response"
   done
 
