@@ -12,11 +12,19 @@ else
 fi
 
 # === SSH Key Check ===
-
-if [ ! -f "$SSH_PUBLIC_KEY" ]; then
-  echo "❌ SSH key not found at $SSH_PUBLIC_KEY"
-  exit 1
+# Check if the variable starts with 'ssh-rsa' (meaning it's a raw key)
+if [[ "$SSH_PUBLIC_KEY" == ssh-rsa* ]]; then
+  echo "✅ Using raw SSH public key string"
+  RAW_KEY="$SSH_PUBLIC_KEY"
+else
+  if [ ! -f "$SSH_PUBLIC_KEY" ]; then
+    echo "❌ SSH key not found at $SSH_PUBLIC_KEY"
+    exit 1
+  fi
+  RAW_KEY=$(cat "$SSH_PUBLIC_KEY")
+  echo "✅ Loaded SSH key from file"
 fi
+
 
 # === Check deploy_payload.sh exists ===
 DEPLOY_SCRIPT="$(dirname "$0")/deploy_payload.sh"
@@ -60,11 +68,10 @@ for ip in "${SERVER_LIST[@]}"; do
   echo "✅ $ip is online. Deploying..."
 
   ssh -o StrictHostKeyChecking=no root@"$ip" \
-    "AWS_ACCESS_KEY_ID='$AWS_ACCESS_KEY_ID' \
-     AWS_SECRET_ACCESS_KEY='$AWS_SECRET_ACCESS_KEY' \
-     SMTP_RELAY_USER='$RELAY_USER' \
-     SMTP_RELAY_PASS='$RELAY_PASS' \
-     BACKUP_ADMIN_EMAIL='$NOTIFY_EMAIL' \
-     HEALTHCHECK_ALERT_EMAIL='$NOTIFY_EMAIL' \
-     bash -s" < "$DEPLOY_SCRIPT"
+    "AWS_ACCESS_KEY_ID=\"$AWS_ACCESS_KEY_ID\" \
+       AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET_ACCESS_KEY\" \
+       SMTP_RELAY_USER=\"$RELAY_USER\" \
+       SMTP_RELAY_PASS=\"$RELAY_PASS\" \
+       BACKUP_ADMIN_EMAIL=\"$NOTIFY_EMAIL\" \
+       bash -s" < "$DEPLOY_SCRIPT"
 done
