@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 
 # Load API key from .env
 ENV_FILE="$(dirname "$0")/../../.env"
