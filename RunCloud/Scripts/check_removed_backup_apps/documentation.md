@@ -1,3 +1,4 @@
+
 # 🧰 RunCloud & Vultr Backup Folder Verification Script
 
 This script verifies whether all existing **RunCloud applications** have corresponding **backup folders** in your **Vultr Object Storage** bucket, and vice versa.
@@ -12,6 +13,7 @@ This script verifies whether all existing **RunCloud applications** have corresp
 - Identify:
   - Orphaned folders (no corresponding app)
   - Apps missing backups (no corresponding folder)
+  - Clean up old backup files from `daily` and `weekly` subfolders of orphaned folders, keeping only the latest one.
 
 ---
 
@@ -85,17 +87,12 @@ This prevents mismatches from minor formatting differences (like underscores vs.
 
 ---
 
-## 📊 Summary
-
-The script ensures your backup folder structure in Vultr accurately reflects the current state of your active applications in RunCloud, helping prevent orphaned backups or missing backups.
-
----
-
 ## 🧼 Cleanup Suggestions
 
 For unmatched folders:
 - Confirm if the related app was intentionally deleted.
 - Archive or remove stale backup folders as needed.
+- The script now **automatically cleans up** `daily` and `weekly` subfolders in unmatched folders by deleting all but the latest backup file.
 
 For unmatched apps:
 - Review backup automation.
