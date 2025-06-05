@@ -1,16 +1,17 @@
-
 # 🧰 RunCloud & Vultr Backup Folder Verification Script
 
-This script verifies whether all existing RunCloud applications have corresponding backup folders in your Vultr Object Storage bucket.
+This script verifies whether all existing **RunCloud applications** have corresponding **backup folders** in your **Vultr Object Storage** bucket, and vice versa.
 
 ---
 
 ## 📦 Purpose
 
-- Fetch all web applications from all RunCloud servers.
-- List all top-level folders in the Vultr bucket (`runcloud-app-backups`).
-- Compare folder names to app names.
-- Print any unmatched folders to the terminal.
+- Retrieve all web applications from all RunCloud servers (with pagination support).
+- List all top-level folders from the Vultr bucket (`runcloud-app-backups`).
+- Compare the list of app names with the list of folders.
+- Identify:
+  - Orphaned folders (no corresponding app)
+  - Apps missing backups (no corresponding folder)
 
 ---
 
@@ -19,9 +20,9 @@ This script verifies whether all existing RunCloud applications have correspondi
 - Bash
 - `jq`
 - AWS CLI (configured for Vultr)
-- `.env` file with the following:
-    - `API_KEY` (RunCloud API)
-    - AWS credentials if not globally configured
+- `.env` file containing:
+  - `API_KEY` (RunCloud API token)
+  - AWS credentials if not globally configured
 
 ---
 
@@ -46,45 +47,56 @@ chmod +x script.sh
 
 ## ✅ Script Behavior
 
-- Uses pagination to loop through all servers and apps.
-- Collects all app names into an array.
-- Lists all folders in Vultr bucket via:
+- Loads environment variables from `.env`.
+- Uses the RunCloud API to:
+  - Paginate through all servers.
+  - Paginate through all web applications on each server.
+- Lists folders in the specified Vultr bucket via:
 
 ```bash
 aws s3 ls s3://runcloud-app-backups/ --endpoint-url https://sjc1.vultrobjects.com
 ```
 
-- Compares **lowercased** folder and app names to avoid mismatches due to casing.
+- Normalizes all names (lowercase, trimmed) before comparing.
 
 ---
 
-## 🛠 Matching Logic
+## 🔍 Matching Logic
 
-To ensure robustness, both folder and app names are normalized before comparison:
+To ensure accuracy, app and folder names are **normalized** before comparison:
 
 ```bash
 norm_folder=$(echo "$folder" | xargs | tr '[:upper:]' '[:lower:]')
 norm_app=$(echo "$app" | xargs | tr '[:upper:]' '[:lower:]')
-if [[ "$norm_folder" == "$norm_app" ]]; then
-  matched=true
-fi
 ```
 
-This solves the issue where `Google_Merchant_Center_API` was flagged as unmatched when the app was saved as `google_merchant_center_api`.
+This prevents mismatches from minor formatting differences (like underscores vs. hyphens or case sensitivity).
 
 ---
 
 ## 📤 Output
 
-- `✅ Found XX apps on RunCloud`
-- `☁️ Scanning folders in Vultr bucket`
-- `❌ Unmatched backup folder: folder_name`
-- `📊 Total backup folders: X, Unmatched: Y`
+- `✅ Total apps found: XX`
+- `☁️ Listing top-level folders in bucket: runcloud-app-backups`
+- `🗑️ Folders with no corresponding RunCloud app (likely deleted):`
+  - Lists unmatched folders
+- `❗ Apps without corresponding S3 backup folders:`
+  - Lists unmatched apps
 
 ---
 
-## 🧼 Cleanup Suggestion
+## 📊 Summary
 
-If a folder is unmatched, consider:
-- Verifying the app was deleted
-- Archiving or deleting the backup
+The script ensures your backup folder structure in Vultr accurately reflects the current state of your active applications in RunCloud, helping prevent orphaned backups or missing backups.
+
+---
+
+## 🧼 Cleanup Suggestions
+
+For unmatched folders:
+- Confirm if the related app was intentionally deleted.
+- Archive or remove stale backup folders as needed.
+
+For unmatched apps:
+- Review backup automation.
+- Manually create a backup folder if necessary.

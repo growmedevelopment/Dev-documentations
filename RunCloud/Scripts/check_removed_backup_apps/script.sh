@@ -2,94 +2,188 @@
 set -euo pipefail
 
 # === Load .env if exists ===
-ENV_FILE="$(dirname "$0")/../../.env"
-if [ -f "$ENV_FILE" ]; then
-  set -a
-  source "$ENV_FILE"
-  set +a
-fi
-
-# === Config ===
-BUCKET="runcloud-app-backups"
-ENDPOINT="https://sjc1.vultrobjects.com"
-
-if [[ -z "${API_KEY:-}" ]]; then
-  echo "❌ API_KEY is not set. Check your .env file."
-  exit 1
-fi
-
-# === Get app names from RunCloud ===
-echo "📡 Fetching applications from RunCloud..."
-declare -a app_names
-page=1
-
-while :; do
-  response=$(curl -s --location --request GET "https://manage.runcloud.io/api/v3/servers?page=$page" \
-    --header "Authorization: Bearer $API_KEY" \
-    --header "Accept: application/json")
-
-  if ! echo "$response" | jq -e '.data' >/dev/null 2>&1; then
-    echo "⚠️ Invalid response from RunCloud API (page $page):"
-    echo "$response"
-    exit 1
+load_env() {
+  local env_file
+  env_file="$(dirname "$0")/../../.env"
+  if [ -f "$env_file" ]; then
+    set -a
+    source "$env_file"
+    set +a
   fi
-
-  servers=$(echo "$response" | jq -c '.data[]')
-  [[ -z "$servers" ]] && break
-
-  while IFS= read -r server; do
-    server_id=$(echo "$server" | jq -r '.id')
-    server_name=$(echo "$server" | jq -r '.name')
-    echo "🔍 Fetching apps from $server_name (ID: $server_id)"
-
-    apps_response=$(curl -s --location --request GET "https://manage.runcloud.io/api/v3/servers/$server_id/webapps" \
-      --header "Authorization: Bearer $API_KEY" \
-      --header "Accept: application/json")
-
-    if ! echo "$apps_response" | jq -e '.data' >/dev/null 2>&1; then
-      echo "⚠️ Failed to get apps for server $server_name ($server_id). Response:"
-      echo "$apps_response"
-      continue
-    fi
-
-    apps=$(echo "$apps_response" | jq -r '.data[].name')
-    while IFS= read -r app_name; do
-      [[ -n "$app_name" ]] && app_names+=("$app_name")
-    done <<< "$apps"
-  done <<< "$servers"
-
-  next=$(echo "$response" | jq -r '.meta?.pagination?.links?.next // empty')
-  [[ -z "$next" ]] && break
-  ((page++))
-done
-
-echo "✅ Found ${#app_names[@]} apps on RunCloud"
-
-# === Get folders from Vultr bucket ===
-echo "☁️ Scanning folders in Vultr bucket: $BUCKET"
-backup_folders=($(aws s3 ls s3://$BUCKET/ --endpoint-url "$ENDPOINT" | awk '/PRE/ {print $2}' | sed 's#/##'))
-
-normalize() {
-  echo "$1" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]'
 }
 
-# === Compare normalized names ===
-unmatched=0
-for folder in "${backup_folders[@]}"; do
-  normalized_folder=$(normalize "$folder")
-  matched=false
-  for app in "${app_names[@]}"; do
-    normalized_app=$(normalize "$app")
-    if [[ "$normalized_folder" == "$normalized_app" ]]; then
-      matched=true
+# === Get S3 folders from Vultr ===
+fetch_s3_folders() {
+  echo "☁️ Listing top-level folders in bucket: $BUCKET"
+  folders=()
+  while IFS= read -r line; do
+    folders+=("$line")
+  done < <(aws s3 ls "s3://$BUCKET/" --endpoint-url "$ENDPOINT" | awk '/PRE/ {print $2}' | sed 's#/##')
+
+  echo "✅ Folders saved:"
+  for folder in "${folders[@]}"; do
+    echo "  -> $folder"
+  done
+}
+
+# === Fetch all apps from RunCloud across all servers ===
+fetch_all_apps_for_server() {
+  local server_id=$1
+  local page=1
+  local more=true
+
+  while $more; do
+    echo "📡 Fetching apps from server: $server_id (page $page)"
+    local response
+    response=$(curl -s --location --request GET "$BASE_URL/servers/$server_id/webapps?sortColumn=name&sortDirection=asc&page=$page" \
+      --header "$AUTH_HEADER" --header "Accept: application/json")
+
+    if ! echo "$response" | jq -e '.data' >/dev/null 2>&1; then
+      echo "  ⚠️ Failed to fetch apps for server $server_id. Skipping."
       break
+    fi
+
+    local page_apps=()  # Always declare this
+
+    local names
+    names=$(echo "$response" | jq -r '.data[]?.name')
+
+    if [[ -n "$names" ]]; then
+      while IFS= read -r name; do
+        page_apps+=("$name")
+      done <<< "$names"
+    fi
+
+    # Only loop if array is non-empty
+    if [ ${#page_apps[@]} -gt 0 ]; then
+      for app in "${page_apps[@]}"; do
+        all_apps+=("$app (Server ID: $server_id)")
+      done
+    fi
+
+    local total_pages
+    total_pages=$(echo "$response" | jq '.meta.pagination.total_pages // 1')
+
+    if (( page >= total_pages )); then
+      more=false
+    else
+      ((page++))
+    fi
+  done
+}
+
+fetch_runcloud_apps() {
+  echo "🌐 Fetching servers from RunCloud..."
+  all_apps=()
+  local page=1
+
+  while :; do
+    local response
+    response=$(curl -s --location --request GET "$BASE_URL/servers?page=$page" \
+      --header "$AUTH_HEADER" --header "Accept: application/json")
+
+    local server_ids=($(echo "$response" | jq -r '.data[]?.id'))
+
+    if [ ${#server_ids[@]} -eq 0 ]; then
+      break
+    fi
+
+    for server_id in "${server_ids[@]}"; do
+      fetch_all_apps_for_server "$server_id"
+    done
+
+    ((page++))
+  done
+
+  echo "✅ Total apps found: ${#all_apps[@]}"
+  for app in "${all_apps[@]}"; do
+    echo "  - $app"
+  done
+}
+
+# === Compare apps and folders to find orphaned folders ===
+find_deleted_apps() {
+  echo ""
+  echo "🗑️ Folders with no corresponding RunCloud app (likely deleted):"
+  deleted_apps=()
+  local app_names_lower=()
+
+  for app in "${all_apps[@]}"; do
+    app_names_lower+=("$(echo "${app%% *}" | tr '[:upper:]' '[:lower:]')")
+  done
+
+  for folder in "${folders[@]}"; do
+    local folder_lower
+    folder_lower=$(echo "$folder" | tr '[:upper:]' '[:lower:]')
+    local match=false
+
+    for app_name in "${app_names_lower[@]}"; do
+      if [[ "$folder_lower" == "$app_name" ]]; then
+        match=true
+        break
+      fi
+    done
+
+    if [ "$match" = false ]; then
+      deleted_apps+=("$folder")
     fi
   done
 
-  if ! $matched; then
-    echo "❌ Unmatched backup folder: $folder"
-    ((unmatched++))
+  if [ ${#deleted_apps[@]} -eq 0 ]; then
+    echo "  ✅ All folders have matching apps."
+  else
+    for folder in "${deleted_apps[@]}"; do
+      echo "  - $folder"
+    done
   fi
-done
+}
 
-echo "📊 Total backup folders: ${#backup_folders[@]}, Unmatched: $unmatched"
+# === Compare folders and apps to find apps missing backups ===
+find_missing_app_backups() {
+  echo ""
+  echo "❗ Apps without corresponding S3 backup folders:"
+  missing_apps=()
+  local folders_lower=()
+
+  for folder in "${folders[@]}"; do
+    folders_lower+=("$(echo "$folder" | tr '[:upper:]' '[:lower:]')")
+  done
+
+  for app in "${all_apps[@]}"; do
+    local app_name
+    app_name=$(echo "${app%% *}" | tr '[:upper:]' '[:lower:]')
+    local found=false
+
+    for folder in "${folders_lower[@]}"; do
+      if [[ "$folder" == "$app_name" ]]; then
+        found=true
+        break
+      fi
+    done
+
+    if [ "$found" = false ]; then
+      missing_apps+=("$app")
+    fi
+  done
+
+  if [ ${#missing_apps[@]} -eq 0 ]; then
+    echo "  ✅ All apps have backup folders."
+  else
+    for app in "${missing_apps[@]}"; do
+      echo "  - $app"
+    done
+  fi
+}
+
+# === MAIN EXECUTION ===
+load_env
+
+BUCKET="runcloud-app-backups"
+ENDPOINT="https://sjc1.vultrobjects.com"
+BASE_URL="https://manage.runcloud.io/api/v3"
+AUTH_HEADER="Authorization: Bearer $API_KEY"
+
+fetch_s3_folders
+fetch_runcloud_apps
+find_deleted_apps
+find_missing_app_backups
