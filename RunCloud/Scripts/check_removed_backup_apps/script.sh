@@ -19,12 +19,7 @@ fetch_s3_folders() {
   while IFS= read -r line; do
     folders+=("$line")
   done < <(aws s3 ls "s3://$BUCKET/" --endpoint-url "$ENDPOINT" | awk '/PRE/ {print $2}' | sed 's#/##')
-
-  echo "✅ Folders saved:"
-  for folder in "${folders[@]}"; do
-    echo "  -> $folder"
-  done
-}
+fo}
 
 # === Fetch all apps from RunCloud across all servers ===
 fetch_all_apps_for_server() {
@@ -43,18 +38,15 @@ fetch_all_apps_for_server() {
       break
     fi
 
-    local page_apps=()  # Always declare this
-
+    local page_apps=()
     local names
     names=$(echo "$response" | jq -r '.data[]?.name')
-
     if [[ -n "$names" ]]; then
       while IFS= read -r name; do
         page_apps+=("$name")
       done <<< "$names"
     fi
 
-    # Only loop if array is non-empty
     if [ ${#page_apps[@]} -gt 0 ]; then
       for app in "${page_apps[@]}"; do
         all_apps+=("$app (Server ID: $server_id)")
@@ -64,11 +56,7 @@ fetch_all_apps_for_server() {
     local total_pages
     total_pages=$(echo "$response" | jq '.meta.pagination.total_pages // 1')
 
-    if (( page >= total_pages )); then
-      more=false
-    else
-      ((page++))
-    fi
+    (( page >= total_pages )) && more=false || ((page++))
   done
 }
 
@@ -83,10 +71,7 @@ fetch_runcloud_apps() {
       --header "$AUTH_HEADER" --header "Accept: application/json")
 
     local server_ids=($(echo "$response" | jq -r '.data[]?.id'))
-
-    if [ ${#server_ids[@]} -eq 0 ]; then
-      break
-    fi
+    [ ${#server_ids[@]} -eq 0 ] && break
 
     for server_id in "${server_ids[@]}"; do
       fetch_all_apps_for_server "$server_id"
@@ -94,11 +79,43 @@ fetch_runcloud_apps() {
 
     ((page++))
   done
+}
 
-  echo "✅ Total apps found: ${#all_apps[@]}"
-  for app in "${all_apps[@]}"; do
-    echo "  - $app"
-  done
+# === Clean old files in daily/weekly for a folder ===
+cleanup_old_backups() {
+  local app_name=$1
+  local frequency=$2  # "daily" or "weekly"
+  local prefix="${app_name}/${frequency}/"
+  local objects=()
+
+  # Check if the subfolder exists
+  if ! aws s3 ls "s3://$BUCKET/$prefix" --endpoint-url "$ENDPOINT" | grep -q .; then
+    echo "  ⚠️  No $frequency backups found for: $app_name (skipping)"
+    return
+  fi
+
+  echo "🧹 Cleaning $frequency backups for: $app_name"
+
+  while IFS= read -r object; do
+    objects+=("$object")
+  done < <(
+    aws s3 ls "s3://$BUCKET/$prefix" --endpoint-url "$ENDPOINT" |
+    awk '{print $4}' |
+    sort
+  )
+
+  if [ ${#objects[@]} -le 1 ]; then
+    echo "  ℹ️  Only one or no backups found in $frequency for: $app_name (nothing to delete)"
+    return
+  fi
+
+    for ((i = 0; i < ${#objects[@]} - 1; i++)); do
+      aws s3 rm "s3://$BUCKET/$prefix${objects[$i]}" --endpoint-url "$ENDPOINT"
+      echo "  ❌ Deleted: $prefix${objects[$i]}"
+    done
+
+    local last_index=$(( ${#objects[@]} - 1 ))
+    echo "  ✅ Kept latest: $prefix${objects[$last_index]}"
 }
 
 # === Compare apps and folders to find orphaned folders ===
@@ -118,24 +135,16 @@ find_deleted_apps() {
     local match=false
 
     for app_name in "${app_names_lower[@]}"; do
-      if [[ "$folder_lower" == "$app_name" ]]; then
-        match=true
-        break
-      fi
+      [[ "$folder_lower" == "$app_name" ]] && match=true && break
     done
 
     if [ "$match" = false ]; then
+      echo "  - $folder"
       deleted_apps+=("$folder")
+      cleanup_old_backups "$folder" "daily"
+      cleanup_old_backups "$folder" "weekly"
     fi
   done
-
-  if [ ${#deleted_apps[@]} -eq 0 ]; then
-    echo "  ✅ All folders have matching apps."
-  else
-    for folder in "${deleted_apps[@]}"; do
-      echo "  - $folder"
-    done
-  fi
 }
 
 # === Compare folders and apps to find apps missing backups ===
@@ -155,15 +164,10 @@ find_missing_app_backups() {
     local found=false
 
     for folder in "${folders_lower[@]}"; do
-      if [[ "$folder" == "$app_name" ]]; then
-        found=true
-        break
-      fi
+      [[ "$folder" == "$app_name" ]] && found=true && break
     done
 
-    if [ "$found" = false ]; then
-      missing_apps+=("$app")
-    fi
+    [ "$found" = false ] && missing_apps+=("$app")
   done
 
   if [ ${#missing_apps[@]} -eq 0 ]; then
