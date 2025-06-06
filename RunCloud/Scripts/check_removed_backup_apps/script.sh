@@ -19,7 +19,7 @@ fetch_s3_folders() {
   while IFS= read -r line; do
     folders+=("$line")
   done < <(aws s3 ls "s3://$BUCKET/" --endpoint-url "$ENDPOINT" | awk '/PRE/ {print $2}' | sed 's#/##')
-fo}
+}
 
 # === Fetch all apps from RunCloud across all servers ===
 fetch_all_apps_for_server() {
