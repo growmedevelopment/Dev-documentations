@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# === Global Arrays ===
+declare -a all_apps=()
+declare -a folders=()
+
 # === Load .env if exists ===
 load_env() {
   local env_file
@@ -62,13 +66,15 @@ fetch_all_apps_for_server() {
 
 fetch_runcloud_apps() {
   echo "🌐 Fetching servers from RunCloud..."
-  all_apps=()
   local page=1
 
   while :; do
     local response
     response=$(curl -s --location --request GET "$BASE_URL/servers?page=$page" \
       --header "$AUTH_HEADER" --header "Accept: application/json")
+
+    echo "DEBUG: RunCloud response (page $page):"
+    echo "$response"
 
     local server_ids=($(echo "$response" | jq -r '.data[]?.id'))
     [ ${#server_ids[@]} -eq 0 ] && break
@@ -84,11 +90,10 @@ fetch_runcloud_apps() {
 # === Clean old files in daily/weekly for a folder ===
 cleanup_old_backups() {
   local app_name=$1
-  local frequency=$2  # "daily" or "weekly"
+  local frequency=$2
   local prefix="${app_name}/${frequency}/"
   local objects=()
 
-  # Check if the subfolder exists
   if ! aws s3 ls "s3://$BUCKET/$prefix" --endpoint-url "$ENDPOINT" | grep -q .; then
     echo "  ⚠️  No $frequency backups found for: $app_name (skipping)"
     return
@@ -109,13 +114,13 @@ cleanup_old_backups() {
     return
   fi
 
-    for ((i = 0; i < ${#objects[@]} - 1; i++)); do
-      aws s3 rm "s3://$BUCKET/$prefix${objects[$i]}" --endpoint-url "$ENDPOINT"
-      echo "  ❌ Deleted: $prefix${objects[$i]}"
-    done
+  for ((i = 0; i < ${#objects[@]} - 1; i++)); do
+    aws s3 rm "s3://$BUCKET/$prefix${objects[$i]}" --endpoint-url "$ENDPOINT"
+    echo "  ❌ Deleted: $prefix${objects[$i]}"
+  done
 
-    local last_index=$(( ${#objects[@]} - 1 ))
-    echo "  ✅ Kept latest: $prefix${objects[$last_index]}"
+  local last_index=$(( ${#objects[@]} - 1 ))
+  echo "  ✅ Kept latest: $prefix${objects[$last_index]}"
 }
 
 # === Compare apps and folders to find orphaned folders ===
@@ -124,6 +129,11 @@ find_deleted_apps() {
   echo "🗑️ Folders with no corresponding RunCloud app (likely deleted):"
   deleted_apps=()
   local app_names_lower=()
+
+  if [ "${#all_apps[@]}" -eq 0 ]; then
+    echo "  ⚠️ No apps found. Skipping orphan folder check."
+    return
+  fi
 
   for app in "${all_apps[@]}"; do
     app_names_lower+=("$(echo "${app%% *}" | tr '[:upper:]' '[:lower:]')")
@@ -153,6 +163,11 @@ find_missing_app_backups() {
   echo "❗ Apps without corresponding S3 backup folders:"
   missing_apps=()
   local folders_lower=()
+
+  if [ "${#all_apps[@]}" -eq 0 ]; then
+    echo "  ⚠️ No apps found. Skipping missing backup check."
+    return
+  fi
 
   for folder in "${folders[@]}"; do
     folders_lower+=("$(echo "$folder" | tr '[:upper:]' '[:lower:]')")
@@ -185,6 +200,11 @@ load_env
 BUCKET="runcloud-app-backups"
 ENDPOINT="https://sjc1.vultrobjects.com"
 BASE_URL="https://manage.runcloud.io/api/v3"
+if [[ -z "${API_KEY:-}" ]]; then
+  echo "❌ API_KEY is not set. Please define it in your .env file."
+  exit 1
+fi
+
 AUTH_HEADER="Authorization: Bearer $API_KEY"
 
 fetch_s3_folders
