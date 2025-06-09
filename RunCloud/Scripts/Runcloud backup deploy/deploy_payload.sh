@@ -82,6 +82,31 @@ error_notify() {
 }
 trap 'error_notify "Unexpected script error at line $LINENO"' ERR
 
+# === AWS CLI Version Guard ===
+# === AWS CLI Version Guard + Auto-Downgrade ===
+CLI_VERSION=$(aws --version 2>/dev/null | awk '{print $1}' | cut -d/ -f2)
+SAFE_VERSION="2.15.0"
+if [[ "$CLI_VERSION" > "$SAFE_VERSION" ]]; then
+  echo "⚠️ Incompatible AWS CLI version $CLI_VERSION detected. Attempting automatic downgrade to $SAFE_VERSION..."
+
+  sudo /usr/local/aws-cli/v2/current/bin/aws uninstall >/dev/null 2>&1 || true
+  sudo rm -rf /usr/local/aws-cli /usr/local/bin/aws
+  hash -r
+
+  curl -s -o /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.15.0.zip"
+  unzip -q /tmp/awscliv2.zip -d /tmp/
+  sudo /tmp/aws/install --update
+
+  CLI_VERSION_NEW=$(aws --version 2>/dev/null | awk '{print $1}' | cut -d/ -f2)
+  if [[ "$CLI_VERSION_NEW" == "$SAFE_VERSION" ]]; then
+    echo "✅ AWS CLI successfully downgraded to $SAFE_VERSION"
+  else
+    error_notify "❌ AWS CLI downgrade failed. Please install version $SAFE_VERSION manually."
+    exit 1
+  fi
+fi
+
+
 if ! command -v mail >/dev/null 2>&1; then
   apt-get update -qq && apt-get install -y mailutils || {
     echo "❌ Cannot install mailutils, aborting."; exit 1;
@@ -157,11 +182,19 @@ main() {
       continue
     }
 
-    if aws s3 cp "$TAR_PATH" "s3://$VULTR_BUCKET/$APP/$MODE/$OUT" --endpoint-url "$VULTR_ENDPOINT"; then
-      echo "✅ Backup and upload successful for $APP" >> /root/backup_success.log
-      rm -rf "$TMP" "$TAR_PATH"
+    if [ -f "$TAR_PATH" ]; then
+      if aws s3api put-object \
+        --bucket "$VULTR_BUCKET" \
+        --key "$APP/$MODE/$OUT" \
+        --body "$TAR_PATH" \
+        --endpoint-url "$VULTR_ENDPOINT"; then
+        echo "✅ Backup and upload successful for $APP" >> /root/backup_success.log
+        rm -rf "$TMP" "$TAR_PATH"
+      else
+        error_notify "❌ Upload failed for $APP (s3api put-object returned error)"
+      fi
     else
-      error_notify "Upload failed for $APP"
+      error_notify "❌ Backup file not found for $APP (expected at $TAR_PATH)"
     fi
 
     # === Cleanup old backups for this app

@@ -14,7 +14,8 @@ This folder contains a complete automation toolkit to deploy backup tasks and he
     - **Verifies AWS CLI connectivity** with `sts get-caller-identity`
     - Deploy the `full_vultr_backup.sh` script:
         - Archives each WordPress app’s files + MySQL DB
-        - Uploads the archive to Vultr Object Storage
+        - Uploads the archive to Vultr Object Storage using `aws s3api put-object`
+        - Automatically downgrades AWS CLI to **v2.15.0** if a newer (incompatible) version is detected
         - Sends a failure email to `$ADMIN_EMAIL` if DB dump or upload fails
     - Deploy the `check_alive.sh` script:
         - Runs every 5 minutes via cron
@@ -23,6 +24,15 @@ This folder contains a complete automation toolkit to deploy backup tasks and he
         - `30 2 * * *` – Daily backup
         - `0 3 * * 0` – Weekly backup
         - `*/5 * * * *` – Server uptime check
+
+---
+
+## ⚠️ AWS CLI Compatibility
+
+Vultr Object Storage has known issues with AWS CLI v2.27+ that cause `NoneType` crashes during uploads. This toolkit:
+- Detects the AWS CLI version
+- Automatically **downgrades to v2.15.0** if necessary
+- Ensures long-term compatibility with Vultr’s S3 API
 
 ---
 
@@ -42,8 +52,6 @@ Runcloud backup deploy/
 ├── servers.list                # Editable list of IPs (used by deploy_to_servers.sh)
 └── ../../.env                  # Environment config (used by both modes)
 ```
-
----
 
 ---
 
