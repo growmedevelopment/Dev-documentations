@@ -14,7 +14,7 @@ load_env() {
     exit 1
   fi
 
-  if [[ -z "$VULTURE_API_TOKEN" || -z "$NOTIFY_EMAIL" ]]; then
+  if [[ -z "$VULTR_API_TOKEN" || -z "$NOTIFY_EMAIL" ]]; then
     echo "❌ Required .env variables (VULTURE_API_TOKEN, NOTIFY_EMAIL) not set"
     exit 1
   fi
