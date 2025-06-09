@@ -1,6 +1,6 @@
-# 📊 RunCloud Server Disk Monitoring – Setup & Usage Guide
+# 📊 RunCloud Server Resource Monitoring – Setup & Usage Guide
 
-This script monitors disk usage across all RunCloud-managed servers. It connects via SSH, collects disk statistics (total, used, unallocated), and emails a styled HTML report.
+This Bash script monitors **disk usage**, **RAM**, and **CPU** across all Vultr-based servers managed via RunCloud. It connects to each server using SSH, gathers system resource information, and sends a visually formatted HTML report via email.
 
 ---
 
@@ -31,15 +31,18 @@ This script monitors disk usage across all RunCloud-managed servers. It connects
 
 ## 🔐 Environment Configuration
 
-Create a `.env` file in the **same directory** as the script:
+Create a `.env` file **in the project root**:
 
 ```env
-API_KEY=your_runcloud_api_key
+VULTURE_API_TOKEN=your_vultr_api_key
 NOTIFY_EMAIL=your_email@example.com
 ```
 
+---
+
 ## ✉️ SMTP Configuration for Email (Gmail Example)
-Create a file at ~/.msmtprc:
+
+Create a file at `~/.msmtprc`:
 
 ```ini
 defaults
@@ -58,46 +61,64 @@ password your_app_password
 account default : gmail
 ```
 
-Then secure it:
+Secure the file:
 
-```bash 
-    chmod 600 ~/.msmtprc
+```bash
+chmod 600 ~/.msmtprc
 ```
+
 ---
+
 ## 🧪 Manual Execution
 
-Run the script using:
-
-```bash 
-    /opt/homebrew/bin/bash /Users/---user---/---path-to-project---/RunCloud/DiskChecker/check_disk_usage_all_servers.sh
-```
----
-## ⏱️ Cron Setup for Daily Execution (at 9 AM)
 ```bash
-  0 9 * * * /opt/homebrew/bin/bash /Users/user/pathToProject/check_disk_usage_all_servers.sh > /dev/null 2>&1
+/opt/homebrew/bin/bash /Users/user/pathToProject/check_disk_usage_all_servers.sh
 ```
+
 ---
+
+## ⏱️ Cron Setup for Daily Execution (at 9 AM)
+
+```bash
+0 9 * * * /opt/homebrew/bin/bash /Users/user/pathToProject/check_disk_usage_all_servers.sh > /dev/null 2>&1
+```
+
+---
+
 ## 📧 HTML Report Includes
-•	Server name and IP address
-•	Total storage space
-•	Used space (highlighted by severity):
-•	🟥 Red: ≥ 90%
-•	🟧 Orange: 60–89%
-•	🟩 Green: < 60%
-•	Unallocated space (any value > 0 is flagged red)
-•	Connection or disk command errors (shown in a separate section)
+
+- Server name and IP address
+- **Disk Space**:
+  - Total GB
+  - Used GB (color-coded):
+    - 🟥 Red: ≥ 90%
+    - 🟧 Orange: 60–89%
+    - 🟩 Green: < 60%
+  - Unallocated GB (flagged if > 0)
+- **RAM Usage %** (color-coded)
+- **CPU Usage %** (color-coded)
+- Error summary for failed servers
+
+---
 
 ## 📂 Output Files
-•	HTML Report:
-RunCloud_Full_Disk_Report_<YYYY-MM-DD>.html
-•	Email Log:
-~/.msmtp.log
+
+- HTML Report:
+  `/tmp/server_report_YYYYMMDD_HHMMSS.html`
+- Email Log:
+  `~/.msmtp.log`
 
 ---
 
 ## 🧰 Troubleshooting
-•	Email not received? Check:
-•	.env and ~/.msmtprc exist and are correct
-•	Gmail users must use an App Password
-•	Review ~/.msmtp.log for delivery errors
-•	SMTP TLS errors? Update your trust file path to match your OS certs.
+
+- Email not received?
+  - Ensure `.env` and `~/.msmtprc` are configured correctly
+  - Use an App Password for Gmail
+  - Check `~/.msmtp.log` for errors
+- TLS Errors?
+  - Update your trust file path in `.msmtprc`
+
+---
+
+_Last updated: 2025-06-09 20:03:42_
