@@ -1,6 +1,6 @@
 # 🔐 SSH Accessibility Checker (`ssh_script`)
 
-This script checks SSH accessibility to all servers listed in your `servers.list` file.
+This script checks SSH accessibility to a **single server**, passed as an argument. It is meant to be run once per server by the main automation runner.
 
 ---
 
@@ -12,42 +12,43 @@ Scripts/ssh_script/script.sh
 
 ---
 
-## ▶️ How to Run
+## ▶️ How It's Used
 
-Use the main controller script (recommended):
+It is called automatically by the universal runner:
 
 ```bash
-/bin/bash apply_to_all_servers.sh
+./deploy_to_servers.sh ssh_script
 ```
 
-Or run directly (requires `servers.list` pre-filled):
+Or manually for a single server:
 
 ```bash
-/bin/bash Scripts/ssh_script/script.sh
+./Scripts/ssh_script/script.sh 192.168.1.10
 ```
 
 ---
 
 ## 📝 Behavior
 
-- Reads IPs from `servers.list`
-- Pings and attempts SSH as `root`
-- Reports status with ✅ or ❌
+- Accepts a single argument: the server IP
+- Attempts SSH login as `root` using key-based auth
+- Times out after 5 seconds
+- Returns:
+  - `0` on success ✅
+  - `1` on failure ❌
 
 ---
 
 ## ✅ Requirements
 
-- `bash`, `jq`, `curl`, `timeout` or `gtimeout`
-- `.env` file in project root with:
-    - `VULTURE_API_TOKEN`
-    - `NOTIFY_EMAIL`
-    - `SSH_PUBLIC_KEY`
+- `bash`, `ssh`, `timeout` (or `gtimeout` on macOS)
+- SSH key already added to the server
+- No password prompts
 
 ---
 
 ## 📌 Notes
 
-- No changes are made to the servers
-- Used only to verify key-based SSH access
-  """
+- No changes are made to the server
+- Safe to run repeatedly
+- Designed for integration with `deploy_to_servers.sh`

@@ -63,38 +63,26 @@ fetch_all_servers() {
 
 ### 🧠 Load Static IPs
 get_all_servers_from_file() {
-  local SERVER_FILE="${SERVER_LIST_FILE:-$ROOT_DIR/servers.list}"
-
-  if [[ ! -f "$SERVER_FILE" ]]; then
-    echo "❌ Server list not found at $SERVER_FILE"
-    exit 1
-  fi
-
+  local SERVER_FILE="$ROOT_DIR/servers.list"
   SERVER_LIST=()
+
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^\s*# ]] && continue
     [[ -z "$line" ]] && continue
     SERVER_LIST+=("$line")
   done < "$SERVER_FILE"
-
-  local COUNT="${#SERVER_LIST[@]}"
-  if [[ "$COUNT" -eq 0 ]]; then
-    echo "⚠️ No servers found in $SERVER_FILE"
-  else
-    echo "📋 Loaded $COUNT server(s) from $SERVER_FILE"
-  fi
 }
 
 ### 🧩 Run Any Script
 run_script() {
-  local folder_name="$1"
-  local script_path="$ROOT_DIR/Scripts/$folder_name/script.sh"
+  local SCRIPT_NAME="$1"
+  local SERVER="$2"
+  local SCRIPT_PATH="$ROOT_DIR/Scripts/$SCRIPT_NAME/script.sh"
 
-  if [[ ! -f "$script_path" ]]; then
-    echo "❌ Script not found: Scripts/$folder_name/script.sh"
-    exit 1
+  if [[ ! -f "$SCRIPT_PATH" ]]; then
+    echo "❌ Script '$SCRIPT_NAME' not found at $SCRIPT_PATH"
+    return 1
   fi
 
-  echo "📂 Running: Scripts/$folder_name/script.sh"
-  bash "$script_path"
+  "$SCRIPT_PATH" "$SERVER"
 }
