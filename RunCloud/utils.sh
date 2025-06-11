@@ -45,6 +45,7 @@ fetch_all_servers() {
       "https://api.vultr.com/v2/instances?page=$page&per_page=500")
 
     if echo "$response" | jq -e '.instances | type == "array"' >/dev/null; then
+      echo "$response"
       echo "$response" | jq -r '.instances[].main_ip' >> "$TMPFILE"
     else
       echo "❌ API error on page $page"
