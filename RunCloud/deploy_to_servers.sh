@@ -4,10 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_NAME="check_ram_cpu_disk_usage"
+SCRIPT_NAME="make_backup"
 
 load_env
 detect_timeout_cmd
+#fetch_all_servers   uncomment it if you want to fetch all servers
 get_all_servers_from_file
 
 if [[ "$SCRIPT_NAME" == "check_ram_cpu_disk_usage" ]]; then
