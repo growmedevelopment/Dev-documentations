@@ -1,38 +1,5 @@
 #!/opt/homebrew/bin/bash
 
-### ───────────────────────────────────────────────
-### 🔐 Load .env and Validate Variables
-### ───────────────────────────────────────────────
-load_env() {
-  ENV_FILE="$(dirname "$0")/../../.env"
-  if [ -f "$ENV_FILE" ]; then
-    set -a
-    source "$ENV_FILE"
-    set +a
-  else
-    echo "❌ .env file not found at $ENV_FILE"
-    exit 1
-  fi
-
-  if [[ -z "$VULTURE_API_TOKEN" || -z "$NOTIFY_EMAIL" ]]; then
-    echo "❌ Required .env variables (VULTURE_API_TOKEN, NOTIFY_EMAIL) not set"
-    exit 1
-  fi
-}
-
-### ───────────────────────────────────────────────
-### ⏱️ Setup Timeout Utility
-### ───────────────────────────────────────────────
-detect_timeout_cmd() {
-  if command -v timeout &>/dev/null; then
-    TIMEOUT_CMD="timeout"
-  elif command -v gtimeout &>/dev/null; then
-    TIMEOUT_CMD="gtimeout"
-  else
-    echo "❌ Neither 'timeout' nor 'gtimeout' found."
-    exit 1
-  fi
-}
 
 ### ───────────────────────────────────────────────
 ### 🌐 Fetch All Servers from Vultr
