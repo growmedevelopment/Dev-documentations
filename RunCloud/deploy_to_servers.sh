@@ -1,14 +1,14 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_NAME="make_backup"
+SCRIPT_NAME="check_ram_cpu_disk_usage"
 
 load_env
 detect_timeout_cmd
-#fetch_all_servers   uncomment it if you want to fetch all servers
+#fetch_all_servers   #uncomment it if you want to fetch all servers
 get_all_servers_from_file
 
 if [[ "$SCRIPT_NAME" == "check_ram_cpu_disk_usage" ]]; then
@@ -40,14 +40,14 @@ fi
 
 FAILED=()
 for i in "${!SERVER_LIST[@]}"; do
-  server="${SERVER_LIST[$i]}"
-  echo "[$((i + 1))/${#SERVER_LIST[@]}] → $server"
+  server_ip="${SERVER_LIST[$i]}"
+  echo "[$((i + 1))/${#SERVER_LIST[@]}] → $server_ip"
 
-  if run_script "$SCRIPT_NAME" "$server"; then
-    echo "✅ Success for $server"
+  if run_script "$SCRIPT_NAME" "$server_ip"; then
+    echo "✅ Success for $server_ip"
   else
-    echo "❌ Failed for $server"
-    FAILED+=("$server")
+    echo "❌ Failed for $server_ip"
+    FAILED+=("$server_ip")
   fi
 done
 
