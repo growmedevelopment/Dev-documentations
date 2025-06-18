@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_NAME="check_ram_cpu_disk_usage"
+SCRIPT_NAME="set_making_backup"
 
 load_env
 detect_timeout_cmd
