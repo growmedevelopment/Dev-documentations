@@ -13,7 +13,8 @@ if timeout 5s ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=
   SCRIPT_PATH="./Scripts/set_making_backup/deploy_payload.sh"
 
   ssh -o StrictHostKeyChecking=no root@"$SERVER_IP" \
-    "AWS_ACCESS_KEY_ID='${AWS_ACCESS_KEY_ID}' \
+    "TARGET_IP='${SERVER_IP}' \
+     AWS_ACCESS_KEY_ID='${AWS_ACCESS_KEY_ID}' \
      AWS_SECRET_ACCESS_KEY='${AWS_SECRET_ACCESS_KEY}' \
      SMTP_RELAY_USER='${SMTP_RELAY_USER}' \
      SMTP_RELAY_PASS='${SMTP_RELAY_PASS}' \

@@ -49,6 +49,8 @@ for i in "${!SERVER_LIST[@]}"; do
     echo "❌ Failed for $server_ip"
     FAILED+=("$server_ip")
   fi
+
+  echo "--------------------------------------------------------"
 done
 
 if [[ "$SCRIPT_NAME" == "check_ram_cpu_disk_usage" && -f "$REPORT_FILE" ]]; then
