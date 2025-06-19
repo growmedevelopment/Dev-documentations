@@ -4,14 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_NAME="set_making_backup"
+SCRIPT_FOLDER="set_making_backup"
 
 load_env
 detect_timeout_cmd
 #fetch_all_servers   #uncomment it if you want to fetch all servers
 get_all_servers_from_file
 
-if [[ "$SCRIPT_NAME" == "check_ram_cpu_disk_usage" ]]; then
+if [[ "$SCRIPT_FOLDER" == "check_ram_cpu_disk_usage" ]]; then
   export REPORT_FILE="/tmp/server_usage_report_$(date +%Y%m%d_%H%M%S).html"
 
   cat <<EOF > "$REPORT_FILE"
@@ -43,7 +43,7 @@ for i in "${!SERVER_LIST[@]}"; do
   server_ip="${SERVER_LIST[$i]}"
   echo "[$((i + 1))/${#SERVER_LIST[@]}] → $server_ip"
 
-  if run_script "$SCRIPT_NAME" "$server_ip"; then
+  if run_script "$SCRIPT_FOLDER" "$server_ip"; then
     echo "✅ Success for $server_ip"
   else
     echo "❌ Failed for $server_ip"
@@ -53,7 +53,7 @@ for i in "${!SERVER_LIST[@]}"; do
   echo "--------------------------------------------------------"
 done
 
-if [[ "$SCRIPT_NAME" == "check_ram_cpu_disk_usage" && -f "$REPORT_FILE" ]]; then
+if [[ "$SCRIPT_FOLDER" == "check_ram_cpu_disk_usage" && -f "$REPORT_FILE" ]]; then
   echo "</table></body></html>" >> "$REPORT_FILE"
 
   (
