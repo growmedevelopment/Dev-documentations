@@ -9,6 +9,29 @@ sed -i 's/#$nrconf{restart} = .*/$nrconf{restart} = '"'a'"';/' /etc/needrestart/
 
 # === 1. Install Dependencies (AWS CLI, mail, etc.) ===
 echo "📦 Ensuring dependencies are installed..."
+
+# Wait for existing apt processes to release locks
+echo "⏳ Waiting for apt lock to be released..."
+MAX_RETRIES=12
+RETRY_COUNT=0
+
+while fuser /var/lib/apt/lists/lock >/dev/null 2>&1 \
+   || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+  if (( RETRY_COUNT >= MAX_RETRIES )); then
+    echo "❌ Timeout: APT lock not released after $((RETRY_COUNT * 5)) seconds."
+    exit 1
+  fi
+  echo "   → Another apt process is running. Retrying in 5s..."
+  sleep 5
+  ((RETRY_COUNT++))
+done
+
+# Check and disable any broken or missing Release-file repositories
+echo "🔍 Checking for invalid APT sources..."
+if grep -R "^deb .*mirror.rackspace.com/mariadb" /etc/apt/sources.list /etc/apt/sources.list.d/*.list &>/dev/null; then
+  echo "   → Found outdated MariaDB repo; disabling it."
+  sed -i.bak '/mirror\.rackspace\.com\/mariadb/s/^/# /' /etc/apt/sources.list.d/*.list || true
+fi
 # Use DEBIAN_FRONTEND=noninteractive to suppress interactive prompts from apt
 DEBIAN_FRONTEND=noninteractive apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip mailutils libsasl2-modules
@@ -24,27 +47,26 @@ else
   echo "  -> AWS CLI v2 is already installed."
 fi
 
-# === 2. Configure AWS CLI for Vultr Object Storage ===
-echo "⚙️  Configuring AWS CLI for Vultr..."
-aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
-aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
-aws configure set default.region us-east-1
-aws configure set default.output json
+# === 2. Install and Configure rclone for Vultr Object Storage ===
+echo "⚙️ Installing and configuring rclone for Vultr..."
 
-mkdir -p /root/.aws
-cat > /root/.aws/config <<EOF
-[default]
-region = us-east-1
-output = json
-s3 =
-    endpoint_url = https://sjc1.vultrobjects.com
+if ! command -v rclone >/dev/null 2>&1; then
+  curl https://rclone.org/install.sh | bash
+fi
+
+mkdir -p /root/.config/rclone
+cat > /root/.config/rclone/rclone.conf <<EOF
+[vultr]
+type = s3
+provider = Other
+env_auth = false
+access_key_id = ${AWS_ACCESS_KEY_ID}
+secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+endpoint = https://sjc1.vultrobjects.com
+acl = private
 EOF
 
-if ! aws s3 ls --endpoint-url https://sjc1.vultrobjects.com > /dev/null 2>&1; then
-  echo "❌ AWS CLI not properly configured or unable to connect to Vultr Object Storage."
-  exit 1
-fi
-echo "✅ AWS CLI configured and authenticated."
+echo "✅ rclone configured for Vultr Object Storage."
 
 
 # === 3. Configure Postfix SMTP Relay ===
@@ -59,10 +81,16 @@ postconf -e "smtp_sasl_security_options = noanonymous"
 postconf -e "smtp_use_tls = yes"
 postconf -e "smtp_tls_security_level = encrypt"
 postconf -e "smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt"
+
 cat > /etc/postfix/sasl_passwd <<EOF
 $RELAY_SMTP $RELAY_USER:$RELAY_PASS
 EOF
 chmod 600 /etc/postfix/sasl_passwd
+
+
+# Safely remove any existing database file
+rm -f /etc/postfix/sasl_passwd.db
+
 postmap /etc/postfix/sasl_passwd
 systemctl restart postfix
 echo "✅ Postfix relay configured."
@@ -154,7 +182,8 @@ main() {
     fi
 
     # --- File backup ---
-    cp -r "$APP_PATH" "$TMP/files"
+    mkdir -p "$TMP/files"
+    cp -a "$APP_PATH/." "$TMP/files/"
 
     case "$MODE" in
       weekly) OUT="${APP}_week-${WEEK}.tar.gz" ;;
@@ -169,21 +198,18 @@ main() {
       continue
     }
 
-    # --- Upload to Vultr ---
-    if [ -f "$TAR_PATH" ]; then
-      if aws s3api put-object \
-        --bucket "$VULTR_BUCKET" \
-        --key "$APP/$MODE/$OUT" \
-        --body "$TAR_PATH" \
-        --endpoint-url "$VULTR_ENDPOINT"; then
-        echo "✅ Backup and upload successful for $APP" >> /root/backup_success.log
-        rm -rf "$TMP" "$TAR_PATH"
-      else
-        error_notify "❌ Upload failed for $APP (s3api put-object returned error)"
-      fi
-    else
-      error_notify "❌ Backup file not found for $APP (expected at $TAR_PATH)"
-    fi
+   # --- Upload to Vultr using rclone ---
+   if [ -f "$TAR_PATH" ]; then
+     echo "📤 Uploading $TAR_PATH to Vultr with rclone..."
+     if rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P; then
+       echo "✅ Backup and upload successful for $APP" >> /root/backup_success.log
+       rm -rf "$TMP" "$TAR_PATH"
+     else
+       error_notify "❌ Upload failed for $APP using rclone"
+     fi
+   else
+     error_notify "❌ Backup file not found for $APP (expected at $TAR_PATH)"
+   fi
 
     # --- Cleanup old backups for this app (Consider S3 Lifecycle Policies as an alternative) ---
     echo "🔍 Cleaning $APP backups for $MODE"
