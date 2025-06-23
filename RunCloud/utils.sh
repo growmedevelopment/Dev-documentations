@@ -15,8 +15,8 @@ load_env() {
     exit 1
   fi
 
-  if [[ -z "${VULTURE_API_TOKEN:-}" || -z "${NOTIFY_EMAIL:-}" ]]; then
-    echo "❌ Required vars (VULTURE_API_TOKEN, NOTIFY_EMAIL) not set"
+  if [[ -z "${VULTR_API_TOKEN:-}" || -z "${NOTIFY_EMAIL:-}" ]]; then
+    echo "❌ Required vars (VULTR_API_TOKEN, NOTIFY_EMAIL) not set"
     exit 1
   fi
 }
@@ -50,7 +50,7 @@ fetch_vultr_servers() {
       count=$(echo "$response" | jq '.instances | length')
       echo "📦 Page $page: $count instances"
 
-      entries=$(echo "$response" | jq -c '.instances[] | {id, name: .label, ipAddress: .main_ip}')
+      entries=$(echo "$response" | jq -c '.instances[] | {id: 0, name: .label, ipAddress: .main_ip}')
       while read -r entry; do
         if [[ "$first" == true ]]; then
           echo "$entry" >> "$JSON_FILE"

@@ -9,7 +9,7 @@ SCRIPT_FOLDER="ssh_injection"
 load_env
 detect_timeout_cmd
 
-# fetch_vultr_servers
+#fetch_vultr_servers
 # fetch_runcloud_servers
 get_all_servers_from_file
 
@@ -22,6 +22,12 @@ if [[ "$SCRIPT_FOLDER" == "ssh_injection" ]]; then
     id=$(echo "$server" | jq -r '.id')
     ip=$(echo "$server" | jq -r '.ipAddress')
     name=$(echo "$server" | jq -r '.name')
+
+    if [[ "$id" == "0" ]]; then
+      echo "❌ Skipping server: invalid ID '0' (Name: $name, IP: $ip)"
+      echo "--------------------------------------------------------"
+      continue
+    fi
 
     echo "🔐 Checking server ID: $id (Name: $name, IP: $ip)"
 
