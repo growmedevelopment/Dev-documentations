@@ -36,20 +36,36 @@ detect_timeout_cmd() {
 ### 📡 Fetch from Vultr
 fetch_vultr_servers() {
   echo "📡 Fetching from Vultr API..."
-  local TMPFILE="$ROOT_DIR/servers.list"
+  local LIST_FILE="$ROOT_DIR/servers.list"
+  local JSON_FILE="$ROOT_DIR/servers.json"
   local page=1
-  > "$TMPFILE"
+  > "$LIST_FILE"
+  > "$JSON_FILE"
+
+  echo "[" > "$JSON_FILE"
+  local first=true
 
   while true; do
     response=$(curl -s -H "Authorization: Bearer $VULTURE_API_TOKEN" \
       "https://api.vultr.com/v2/instances?page=$page&per_page=500")
 
     if echo "$response" | jq -e '.instances | type == "array"' >/dev/null; then
-      echo "$response" | jq -r '.instances[].main_ip' >> "$TMPFILE"
+      echo "$response" | jq -r '.instances[].main_ip' >> "$LIST_FILE"
+
+      entries=$(echo "$response" | jq -c '.instances[] | {id, name: .label, ipAddress: .main_ip}')
+      while read -r entry; do
+        if [[ "$first" == true ]]; then
+          echo "$entry" >> "$JSON_FILE"
+          first=false
+        else
+          echo ",$entry" >> "$JSON_FILE"
+        fi
+      done <<< "$entries"
     else
       echo "❌ API error on page $page"
       echo "$response"
-      exit 1
+      echo "]" >> "$JSON_FILE"
+      return 1
     fi
 
     next=$(echo "$response" | jq -r '.meta.links.next // empty')
@@ -58,7 +74,9 @@ fetch_vultr_servers() {
     sleep 0.05
   done
 
-  echo "📊 Saved $(wc -l < "$TMPFILE") servers to $TMPFILE"
+  echo "]" >> "$JSON_FILE"
+  echo "📄 IPs saved to $LIST_FILE"
+  echo "📄 Full server metadata saved to $JSON_FILE"
 }
 
 ### 📡 Fetch from RunCloude
@@ -118,8 +136,14 @@ get_all_servers_from_file() {
   local SERVER_FILE="$ROOT_DIR/servers.list"
   SERVER_LIST=()
 
+  if [[ ! -f "$SERVER_FILE" ]]; then
+    echo "❌ Server list file not found: $SERVER_FILE"
+    return 1
+  fi
+
   while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ "$line" =~ ^\s*# ]] && continue
+    line="${line%%#*}"        # Remove inline comments
+    line="$(echo "$line" | xargs)"  # Trim whitespace
     [[ -z "$line" ]] && continue
     SERVER_LIST+=("$line")
   done < "$SERVER_FILE"
