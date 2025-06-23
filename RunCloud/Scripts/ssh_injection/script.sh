@@ -5,7 +5,7 @@ SERVER_ID="$1"
 
 echo "🔍 Checking SSH access to server id: $SERVER_ID..."
 
-# Inject SSH key via RunCloud API
+#Inject SSH key via RunCloud API
 ssh_response=$(curl -s --location --request POST \
   "https://manage.runcloud.io/api/v3/servers/$SERVER_ID/ssh/credentials" \
   --header "Authorization: Bearer $RUNCLOUD_API_TOKEN" \

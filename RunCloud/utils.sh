@@ -77,55 +77,41 @@ fetch_vultr_servers() {
 }
 
 ### 📡 Fetch from RunCloude
-fetch_runcloud_servers() {
-  echo "📡 Fetching full server data from RunCloud..."
-  local JSONFILE="$ROOT_DIR/servers.json"
-  > "$JSONFILE"
-
+fetch_all_runcloud_servers() {
+  local fresh_file="$ROOT_DIR/servers_runcloud_fresh.json"
+  declare -a temp_entries=()
   local page=1
-  local first=true
-  echo "[" > "$JSONFILE"
+
+  echo "🔄 Fetching server list from RunCloud (paginated, 40 per page)..."
 
   while true; do
-    echo "🌐 Fetching page $page (perPage=40)..."
-    response=$(curl -s -X GET \
+    echo "📦 Requesting page $page..."
+    response=$(curl -sS -X GET \
       "https://manage.runcloud.io/api/v3/servers?page=$page&perPage=40" \
       -H "Authorization: Bearer $RUNCLOUD_API_TOKEN" \
       -H "Accept: application/json")
 
-    if echo "$response" | jq -e '.data | type == "array"' >/dev/null; then
-      local count
-      count=$(echo "$response" | jq '.data | length')
-      echo "📦 Retrieved $count servers from page $page"
+    entries=$(echo "$response" | jq -c '.data[]' 2>/dev/null || true)
+    [[ -z "$entries" ]] && break
 
-      json_data=$(echo "$response" | jq -c '.data[]')
-      while read -r entry; do
-        if [[ "$first" == true ]]; then
-          echo "$entry" >> "$JSONFILE"
-          first=false
-        else
-          echo ",$entry" >> "$JSONFILE"
-        fi
-      done <<< "$json_data"
-    else
-      echo "❌ RunCloud API error on page $page"
-      echo "$response"
-      echo "]" >> "$JSONFILE"
-      return 1
-    fi
+    while IFS= read -r entry; do
+      temp_entries+=("$entry")
+    done <<< "$entries"
 
-    next_url=$(echo "$response" | jq -r '.meta.pagination.links.next // empty')
-    if [[ -z "$next_url" ]]; then
-      echo "✅ No more pages. All server data retrieved."
-      break
-    fi
+    # If fewer than 40 entries, no more pages
+    count=$(echo "$entries" | wc -l)
+    (( count < 40 )) && break
 
     ((page++))
-    sleep 0.1
   done
 
-  echo "]" >> "$JSONFILE"
-  echo "📄 All server data saved to $JSONFILE"
+  if [[ ${#temp_entries[@]} -eq 0 ]]; then
+    echo "❌ No server data returned from RunCloud API"
+    return 1
+  fi
+
+  jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr' > "$fresh_file"
+  echo "📥 Cached ${#temp_entries[@]} server entries to $fresh_file"
 }
 
 ### 🧠 Load Static IPs
