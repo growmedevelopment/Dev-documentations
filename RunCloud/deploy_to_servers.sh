@@ -4,12 +4,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_FOLDER="set_making_backup"
+SCRIPT_FOLDER="make_backup"
 
 load_env
 detect_timeout_cmd
-#fetch_all_servers   #uncomment it if you want to fetch all servers
-get_all_servers_from_file
+#fetch_vultr_servers   #uncomment it if you want to fetch all servers
+#fetch_runcloud_servers
+#get_all_servers_from_file
 
 if [[ "$SCRIPT_FOLDER" == "check_ram_cpu_disk_usage" ]]; then
   export REPORT_FILE="/tmp/server_usage_report_$(date +%Y%m%d_%H%M%S).html"

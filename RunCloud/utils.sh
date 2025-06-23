@@ -34,7 +34,7 @@ detect_timeout_cmd() {
 }
 
 ### 📡 Fetch from Vultr
-fetch_all_servers() {
+fetch_vultr_servers() {
   echo "📡 Fetching from Vultr API..."
   local TMPFILE="$ROOT_DIR/servers.list"
   local page=1
@@ -59,6 +59,58 @@ fetch_all_servers() {
   done
 
   echo "📊 Saved $(wc -l < "$TMPFILE") servers to $TMPFILE"
+}
+
+### 📡 Fetch from RunCloude
+fetch_runcloud_servers() {
+  echo "📡 Fetching full server data from RunCloud..."
+  local JSONFILE="$ROOT_DIR/servers_runcloude.json"
+  > "$JSONFILE"
+
+  local page=1
+  local first=true
+  echo "[" > "$JSONFILE"
+
+  while true; do
+    echo "🌐 Fetching page $page (perPage=40)..."
+    response=$(curl -s -X GET \
+      "https://manage.runcloud.io/api/v3/servers?page=$page&perPage=40" \
+      -H "Authorization: Bearer $RUNCLOUD_API_TOKEN" \
+      -H "Accept: application/json")
+
+    if echo "$response" | jq -e '.data | type == "array"' >/dev/null; then
+      local count
+      count=$(echo "$response" | jq '.data | length')
+      echo "📦 Retrieved $count servers from page $page"
+
+      json_data=$(echo "$response" | jq -c '.data[]')
+      while read -r entry; do
+        if [[ "$first" == true ]]; then
+          echo "$entry" >> "$JSONFILE"
+          first=false
+        else
+          echo ",$entry" >> "$JSONFILE"
+        fi
+      done <<< "$json_data"
+    else
+      echo "❌ RunCloud API error on page $page"
+      echo "$response"
+      echo "]" >> "$JSONFILE"
+      return 1
+    fi
+
+    next_url=$(echo "$response" | jq -r '.meta.pagination.links.next // empty')
+    if [[ -z "$next_url" ]]; then
+      echo "✅ No more pages. All server data retrieved."
+      break
+    fi
+
+    ((page++))
+    sleep 0.1
+  done
+
+  echo "]" >> "$JSONFILE"
+  echo "📄 All server data saved to $JSONFILE"
 }
 
 ### 🧠 Load Static IPs

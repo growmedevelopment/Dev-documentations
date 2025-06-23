@@ -1,4 +1,5 @@
 .idea
 .env
 RunCloud/servers.list
+RunCloud/servers_runcloude.json
 Documentation
