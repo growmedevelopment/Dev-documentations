@@ -82,7 +82,7 @@ fetch_vultr_servers() {
 ### 📡 Fetch from RunCloude
 fetch_runcloud_servers() {
   echo "📡 Fetching full server data from RunCloud..."
-  local JSONFILE="$ROOT_DIR/servers_runcloude.json"
+  local JSONFILE="$ROOT_DIR/servers.json"
   > "$JSONFILE"
 
   local page=1
@@ -133,20 +133,16 @@ fetch_runcloud_servers() {
 
 ### 🧠 Load Static IPs
 get_all_servers_from_file() {
-  local SERVER_FILE="$ROOT_DIR/servers.list"
+  local JSON_FILE="$ROOT_DIR/servers.json"
   SERVER_LIST=()
 
-  if [[ ! -f "$SERVER_FILE" ]]; then
-    echo "❌ Server list file not found: $SERVER_FILE"
+  if [[ ! -f "$JSON_FILE" ]]; then
+    echo "❌ Server JSON file not found: $JSON_FILE"
     return 1
   fi
 
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line="${line%%#*}"        # Remove inline comments
-    line="$(echo "$line" | xargs)"  # Trim whitespace
-    [[ -z "$line" ]] && continue
-    SERVER_LIST+=("$line")
-  done < "$SERVER_FILE"
+  echo "📄 Loading server IPs from $JSON_FILE..."
+  mapfile -t SERVER_LIST < <(jq -r '.[].ipAddress' "$JSON_FILE")
 }
 
 ### 🧩 Run Any Script
