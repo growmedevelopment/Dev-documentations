@@ -33,24 +33,22 @@ detect_timeout_cmd() {
   fi
 }
 
-### 📡 Fetch from Vultr
 fetch_vultr_servers() {
   echo "📡 Fetching from Vultr API..."
-  local LIST_FILE="$ROOT_DIR/servers.list"
   local JSON_FILE="$ROOT_DIR/servers.json"
   local page=1
-  > "$LIST_FILE"
   > "$JSON_FILE"
-
   echo "[" > "$JSON_FILE"
   local first=true
 
   while true; do
-    response=$(curl -s -H "Authorization: Bearer $VULTURE_API_TOKEN" \
+    response=$(curl -s -H "Authorization: Bearer $VULTR_API_TOKEN" \
       "https://api.vultr.com/v2/instances?page=$page&per_page=500")
 
     if echo "$response" | jq -e '.instances | type == "array"' >/dev/null; then
-      echo "$response" | jq -r '.instances[].main_ip' >> "$LIST_FILE"
+      local count
+      count=$(echo "$response" | jq '.instances | length')
+      echo "📦 Page $page: $count instances"
 
       entries=$(echo "$response" | jq -c '.instances[] | {id, name: .label, ipAddress: .main_ip}')
       while read -r entry; do
@@ -75,8 +73,7 @@ fetch_vultr_servers() {
   done
 
   echo "]" >> "$JSON_FILE"
-  echo "📄 IPs saved to $LIST_FILE"
-  echo "📄 Full server metadata saved to $JSON_FILE"
+  echo "📄 Server data saved to $JSON_FILE"
 }
 
 ### 📡 Fetch from RunCloude
