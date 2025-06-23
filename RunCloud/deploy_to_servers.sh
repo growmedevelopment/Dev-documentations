@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_FOLDER="make_backup"
+SCRIPT_FOLDER="ssh_checks"
 
 load_env
 detect_timeout_cmd
