@@ -4,21 +4,40 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_FOLDER="ssh_checks"
+SCRIPT_FOLDER="ssh_injection"
 
 load_env
 detect_timeout_cmd
 
-# Fetch server metadata and extract IPs from servers.json
-#fetch_vultr_servers
+# fetch_vultr_servers
 # fetch_runcloud_servers
 get_all_servers_from_file
 
+FAILED=()
+
 if [[ "$SCRIPT_FOLDER" == "ssh_injection" ]]; then
-  # Future placeholder for SSH script logic
-  :
+  echo "📂 Running SSH injection using server IDs"
+
+  jq -c '.[]' "$ROOT_DIR/servers.json" | while IFS= read -r server; do
+    id=$(echo "$server" | jq -r '.id')
+    ip=$(echo "$server" | jq -r '.ipAddress')
+    name=$(echo "$server" | jq -r '.name')
+
+    echo "🔐 Checking server ID: $id (Name: $name, IP: $ip)"
+
+    if run_script "$SCRIPT_FOLDER" "$id"; then
+      echo "✅ Success for $id"
+    else
+      echo "❌ Failed for $id"
+      FAILED+=("$id")
+    fi
+
+    echo "--------------------------------------------------------"
+  done
 
 else
+  echo "📂 Running $SCRIPT_FOLDER using server IPs"
+
   if [[ "$SCRIPT_FOLDER" == "check_ram_cpu_disk_usage" ]]; then
     export REPORT_FILE="/tmp/server_usage_report_$(date +%Y%m%d_%H%M%S).html"
 
@@ -46,7 +65,6 @@ else
 EOF
   fi
 
-  FAILED=()
   for i in "${!SERVER_LIST[@]}"; do
     server_ip="${SERVER_LIST[$i]}"
     echo "[$((i + 1))/${#SERVER_LIST[@]}] → $server_ip"
@@ -74,12 +92,13 @@ EOF
 
     echo "📧 HTML report sent to $NOTIFY_EMAIL"
   fi
+fi
 
-  echo -e "\n📋 Summary:"
-  if [[ "${#FAILED[@]}" -eq 0 ]]; then
-    echo "✅ All servers completed successfully."
-  else
-    echo "❌ Failed on:"
-    printf ' - %s\n' "${FAILED[@]}"
-  fi
+# Shared summary
+echo -e "\n📋 Summary:"
+if [[ "${#FAILED[@]}" -eq 0 ]]; then
+  echo "✅ All servers completed successfully."
+else
+  echo "❌ Failed on:"
+  printf ' - %s\n' "${FAILED[@]}"
 fi

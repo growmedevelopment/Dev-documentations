@@ -1,9 +1,9 @@
 #!/opt/homebrew/bin/bash
 set -euo pipefail
 
-SERVER_IP="$1"
+SERVER_ID="$1"
 
-echo "🔍 Checking SSH access to $SERVER_IP..."
+echo "🔍 Checking SSH access to server id-  $SERVER_ID..."
 
 
 
