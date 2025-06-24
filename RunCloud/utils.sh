@@ -120,18 +120,18 @@ get_all_servers_from_file() {
   SERVER_LIST=()
 
   if [[ ! -f "$JSON_FILE" ]]; then
-    echo "❌ Server JSON file not found: $JSON_FILE"
-    return 1
+      echo "📁 Creating missing $JSON_FILE..."
+      mkdir -p "$(dirname "$JSON_FILE")"
+      echo "[]" > "$JSON_FILE"
   fi
 
   echo "📄 Loading server IPs from $JSON_FILE..."
   mapfile -t SERVER_LIST < <(jq -r '.[].ipAddress' "$JSON_FILE")
 }
 
-### 🧩 Run Any Script
 run_script() {
   local SCRIPT_NAME="$1"
-  local SERVER="$2"
+  shift
   local SCRIPT_PATH="$ROOT_DIR/Scripts/$SCRIPT_NAME/script.sh"
 
   if [[ ! -f "$SCRIPT_PATH" ]]; then
@@ -139,5 +139,9 @@ run_script() {
     return 1
   fi
 
-  "$SCRIPT_PATH" "$SERVER"
+  # Log the call (optional)
+  echo "▶️ Running: $SCRIPT_PATH $*"
+
+  # Forward all remaining arguments
+  "$SCRIPT_PATH" "$@"
 }

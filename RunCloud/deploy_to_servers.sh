@@ -8,109 +8,34 @@ SCRIPT_FOLDER="ssh_injection"
 
 load_env
 detect_timeout_cmd
-
-#fetch_vultr_servers
-
 get_all_servers_from_file
-
-
-get_valid_id_by_ip() {
-  local ip="$1"
-  local fresh_file="$ROOT_DIR/servers_runcloud_fresh.json"
-  declare -a temp_entries=()
-
-  # Check existing cache
-  if [[ -f "$fresh_file" ]]; then
-    id=$(jq -r --arg ip "$ip" '.[] | select(.ipAddress==$ip).id' "$fresh_file" | head -n1 || true)
-    [[ -n "$id" && "$id" != "0" ]] && { echo "$id"; return 0; }
-  fi
-
-  echo "🔄 Fetching server list from RunCloud (paginated, 40 per page)..."
-  local page=1
-
-  while true; do
-    echo "📦 Requesting page $page..."
-    response=$(curl -sS -X GET \
-      "https://manage.runcloud.io/api/v3/servers?page=$page&perPage=40" \
-      -H "Authorization: Bearer $RUNCLOUD_API_TOKEN" \
-      -H "Accept: application/json")
-
-    entries=$(echo "$response" | jq -c '.data[]' 2>/dev/null || true)
-    [[ -z "$entries" ]] && break
-
-    while IFS= read -r entry; do
-      temp_entries+=("$entry")
-    done <<< "$entries"
-
-    # If fewer than 40 items, no more pages
-    count=$(echo "$entries" | wc -l)
-    (( count < 40 )) && break
-
-    ((page++))
-  done
-
-  if [[ ${#temp_entries[@]} -eq 0 ]]; then
-    echo "❌ No data returned from RunCloud API"
-    return 1
-  fi
-
-  jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr' > "$fresh_file"
-  echo "📥 Cached ${#temp_entries[@]} server entries to $fresh_file"
-
-  id=$(jq -r --arg ip "$ip" '.[] | select(.ipAddress==$ip).id' "$fresh_file" | head -n1 || true)
-  [[ -n "$id" && "$id" != "0" ]] && { echo "$id"; return 0; }
-
-  echo "❌ No match for IP $ip after fetching"
-  return 1
-}
 
 FAILED=()
 
 if [[ "$SCRIPT_FOLDER" == "ssh_injection" ]]; then
   echo "📂 Running SSH injection using server IPs to obtain IDs"
-  FAILED=()
+  SERVER_JSON="$ROOT_DIR/servers_runcloud_fresh.json"
 
-  # Fetch all servers from RunCloud and cache them
-  fetch_all_runcloud_servers
+  while IFS= read -r row; do
+    id=$(jq -r '.id' <<< "$row")
+    ip=$(jq -r '.ipAddress' <<< "$row")
+    name=$(jq -r '.name' <<< "$row")
 
-  # Iterate over IPs from servers.json
-  mapfile -t IP_LIST < <(jq -r '.[].ipAddress' "$ROOT_DIR/servers.json")
-
-  for ip in "${IP_LIST[@]}"; do
-    name=$(jq -r --arg ip "$ip" '.[] | select(.ipAddress==$ip) | .name' "$ROOT_DIR/servers.json")
-    id=$(jq -r --arg ip "$ip" '.[] | select(.ipAddress==$ip) | .id' "$ROOT_DIR/servers.json")
-
-    if [[ -z "$id" || "$id" == "0" ]]; then
-      echo "🔍 No valid ID for $ip — resolving from fresh RunCloud cache..."
-      id=$(jq -r --arg ip "$ip" '.[] | select(.ipAddress==$ip) | .id' "$ROOT_DIR/servers_runcloud_fresh.json" | head -n1 || true)
-
-      if [[ -z "$id" || "$id" == "0" ]]; then
-        echo "⚠️ Skipping $name ($ip): no valid ID found"
-        echo "--------------------------------------------------------"
-        continue
-      fi
+    echo "→ Running script for $name ($ip | ID: $id)"
+    if run_script "$SCRIPT_FOLDER" "$id" "$ip" "$name"; then
+      echo "✅ Success for $name"
     else
-      echo "🔐 Using cached ID: $id (Name: $name, IP: $ip)"
+      echo "❌ Failed for $name"
+      FAILED+=("$ip")
     fi
-
-    echo "🔐 Injecting SSH to server ID: $id (Name: $name, IP: $ip)"
-
-    if run_script "$SCRIPT_FOLDER" "$id"; then
-      echo "✅ Success for $id"
-    else
-      echo "❌ Failed for $id"
-      FAILED+=("$id")
-    fi
-
     echo "--------------------------------------------------------"
-  done
+  done < <(jq -c '.[]' "$SERVER_JSON")
 
 else
   echo "📂 Running $SCRIPT_FOLDER using server IPs"
 
   if [[ "$SCRIPT_FOLDER" == "check_ram_cpu_disk_usage" ]]; then
     export REPORT_FILE="/tmp/server_usage_report_$(date +%Y%m%d_%H%M%S).html"
-
     cat <<EOF > "$REPORT_FILE"
 <html><head>
  <style>
