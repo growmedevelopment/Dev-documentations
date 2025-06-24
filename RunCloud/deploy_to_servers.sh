@@ -16,25 +16,6 @@ SERVER_JSON="$ROOT_DIR/servers.json"
 FAILED=()
 REPORT_FILE=""
 
-
-# ────────────────────────────────────────────────────────────────
-# Handler for RAM/CPU/Disk usage summary + email
-# ────────────────────────────────────────────────────────────────
-
-handle_ssh_injection() {
-  echo "📂 Running SSH injection using server IPs to obtain IDs"
-
-  if [[ ! -f "$SERVER_JSON" ]]; then
-    echo "⚠️  $SERVER_JSON not found. Running fetch_all_runcloud_servers..."
-    fetch_all_runcloud_servers
-
-    if [[ ! -f "$SERVER_JSON" ]]; then
-      echo "❌ Failed to generate $SERVER_JSON. Aborting."
-      exit 1
-    fi
-  fi
-}
-
 # ────────────────────────────────────────────────────────────────
 # Handler for RAM/CPU/Disk usage summary + email
 # ────────────────────────────────────────────────────────────────
@@ -61,24 +42,24 @@ handle_default_script() {
 load_env
 detect_timeout_cmd
 
-# Ensure servers.json file exists
-if [[ ! -f "$SERVER_JSON" ]]; then
-  create_servers_json_file
+if [[ "$SCRIPT_FOLDER" == "ssh_injection" ]]; then
+  create_or_clear_servers_json_file
+  fetch_all_runcloud_servers
+else
+  # Only fetch if file doesn't exist or is empty
+  if [[ ! -f "$SERVER_JSON" || $(jq 'length' "$SERVER_JSON") -eq 0 ]]; then
+    create_or_clear_servers_json_file
+    fetch_vultr_servers
+  fi
 fi
 
-# Check if it's empty (valid but has no servers)
-if [[ $(jq 'length' "$SERVER_JSON") -eq 0 ]]; then
-  fetch_vultr_servers
-fi
 
 get_all_servers_from_file
 
-#if [[ "$SCRIPT_FOLDER" == "ssh_injection" ]]; then
-#  handle_ssh_injection
-#fi
-#
 if [[ "$SCRIPT_FOLDER" == "check_ram_cpu_disk_usage" ]]; then
   handle_check_usage
+else
+  handle_default_script
 fi
-handle_default_script
+
 print_summary

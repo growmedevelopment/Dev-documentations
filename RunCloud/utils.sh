@@ -120,7 +120,7 @@ fetch_all_runcloud_servers() {
 # Ensures the directory exists before writing the file.
 # Overwrites any existing file at the same path.
 # ────────────────────────────────────────────────────────────────
-create_servers_json_file(){
+create_or_clear_servers_json_file(){
   local JSON_FILE="$ROOT_DIR/servers.json"
 
   echo "📁 Creating missing $JSON_FILE..."
@@ -128,15 +128,23 @@ create_servers_json_file(){
   echo "[]" > "$JSON_FILE"
 }
 
-### 🧠 Load Static IPs
+### 🧠 Load Static Server Data
 get_all_servers_from_file() {
   local JSON_FILE="$ROOT_DIR/servers.json"
-  SERVER_LIST=()
 
-  echo "📄 Loading server IPs from $JSON_FILE..."
-  mapfile -t SERVER_LIST < <(jq -r '.[].ipAddress' "$JSON_FILE")
+  SERVER_IDS=()
+  SERVER_IPS=()
+  SERVER_NAMES=()
 
-  echo "📦 Loaded ${#SERVER_LIST[@]} servers from file"
+  echo "📄 Loading server details from $JSON_FILE..."
+
+  while IFS=$'\t' read -r id ip name; do
+    SERVER_IDS+=("$id")
+    SERVER_IPS+=("$ip")
+    SERVER_NAMES+=("$name")
+  done < <(jq -r '.[] | [.id, .ipAddress, .name] | @tsv' "$JSON_FILE")
+
+  echo "📦 Loaded ${#SERVER_IDS[@]} servers from file"
 }
 
 run_script() {
@@ -211,14 +219,19 @@ send_html_report() {
 # If a server fails, it's added to the FAILED array.
 # ────────────────────────────────────────────────────────────────
 run_for_all_servers() {
-  for i in "${!SERVER_LIST[@]}"; do
-    server_ip="${SERVER_LIST[$i]}"
-    echo "[$((i + 1))/${#SERVER_LIST[@]}] → $server_ip"
+  echo "📋 Running for ${#SERVER_IPS[@]} servers..."
 
-    if run_script "$SCRIPT_FOLDER" "$server_ip"; then
-      echo "✅ Success for $server_ip"
+  for i in "${!SERVER_IPS[@]}"; do
+    server_id="${SERVER_IDS[$i]}"
+    server_ip="${SERVER_IPS[$i]}"
+    server_name="${SERVER_NAMES[$i]}"
+
+    echo "[$((i + 1))/${#SERVER_IPS[@]}] → $server_ip ($server_name)"
+
+    if run_script "$SCRIPT_FOLDER" "$server_ip" "$server_id" "$server_name"; then
+      echo "✅ Success for $server_name ($server_ip)"
     else
-      echo "❌ Failed for $server_ip"
+      echo "❌ Failed for $server_name ($server_ip)"
       FAILED+=("$server_ip")
     fi
 
