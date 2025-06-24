@@ -50,7 +50,7 @@ fetch_vultr_servers() {
       count=$(echo "$response" | jq '.instances | length')
       echo "📦 Page $page: $count instances"
 
-      entries=$(echo "$response" | jq -c '.instances[] | {id: 0, name: .label, ipAddress: .main_ip}')
+      entries=$(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, ipAddress: .main_ip}')
       while read -r entry; do
         if [[ "$first" == true ]]; then
           echo "$entry" >> "$JSON_FILE"
@@ -114,16 +114,24 @@ fetch_all_runcloud_servers() {
   echo "📥 Wrote ${#temp_entries[@]} simplified server entries to $output_file"
 }
 
+
+# ────────────────────────────────────────────────────────────────
+# Creates an empty servers.json file with a JSON array: []
+# Ensures the directory exists before writing the file.
+# Overwrites any existing file at the same path.
+# ────────────────────────────────────────────────────────────────
+create_servers_json_file(){
+  local JSON_FILE="$ROOT_DIR/servers.json"
+
+  echo "📁 Creating missing $JSON_FILE..."
+  mkdir -p "$(dirname "$JSON_FILE")"
+  echo "[]" > "$JSON_FILE"
+}
+
 ### 🧠 Load Static IPs
 get_all_servers_from_file() {
   local JSON_FILE="$ROOT_DIR/servers.json"
   SERVER_LIST=()
-
-  if [[ ! -f "$JSON_FILE" ]]; then
-    echo "📁 Creating missing $JSON_FILE..."
-    mkdir -p "$(dirname "$JSON_FILE")"
-    echo "[]" > "$JSON_FILE"
-  fi
 
   echo "📄 Loading server IPs from $JSON_FILE..."
   mapfile -t SERVER_LIST < <(jq -r '.[].ipAddress' "$JSON_FILE")
@@ -147,7 +155,6 @@ run_script() {
   # Forward all remaining arguments
   "$SCRIPT_PATH" "$@"
 }
-
 
 # ────────────────────────────────────────────────────────────────
 # Generates the beginning of an HTML report for server usage.
@@ -180,7 +187,6 @@ setup_html_report() {
 EOF
 }
 
-
 # ────────────────────────────────────────────────────────────────
 # Appends closing HTML tags to REPORT_FILE and sends it via email
 # using msmtp. Assumes $NOTIFY_EMAIL and $REPORT_FILE are set.
@@ -198,7 +204,6 @@ send_html_report() {
 
   echo "📧 HTML report sent to $NOTIFY_EMAIL"
 }
-
 
 # ────────────────────────────────────────────────────────────────
 # Iterates over SERVER_LIST and runs the designated script

@@ -8,7 +8,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_FOLDER="ssh_injection"
+SCRIPT_FOLDER="ssh_checks"
 #SCRIPT_FOLDER="${1:-ssh_injection}"
 #./main.sh check_ram_cpu_disk_usage
 
@@ -58,21 +58,27 @@ handle_default_script() {
 #---------------------------------------
 # Main Logic
 #---------------------------------------
-
 load_env
 detect_timeout_cmd
+
+# Ensure servers.json file exists
+if [[ ! -f "$SERVER_JSON" ]]; then
+  create_servers_json_file
+fi
+
+# Check if it's empty (valid but has no servers)
+if [[ $(jq 'length' "$SERVER_JSON") -eq 0 ]]; then
+  fetch_vultr_servers
+fi
+
 get_all_servers_from_file
 
-case "$SCRIPT_FOLDER" in
-  ssh_injection)
-    handle_ssh_injection
-    ;;
-  check_ram_cpu_disk_usage)
-    handle_check_usage
-    ;;
-  *)
-    handle_default_script
-    ;;
-esac
-
+#if [[ "$SCRIPT_FOLDER" == "ssh_injection" ]]; then
+#  handle_ssh_injection
+#fi
+#
+#if [[ "$SCRIPT_FOLDER" == "check_ram_cpu_disk_usage" ]]; then
+#  handle_check_usage
+#fi
+handle_default_script
 print_summary
