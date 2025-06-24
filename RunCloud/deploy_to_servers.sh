@@ -15,6 +15,17 @@ FAILED=()
 if [[ "$SCRIPT_FOLDER" == "ssh_injection" ]]; then
   echo "📂 Running SSH injection using server IPs to obtain IDs"
   SERVER_JSON="$ROOT_DIR/servers_runcloud_fresh.json"
+  if [[ ! -f "$SERVER_JSON" ]]; then
+    echo "⚠️  $SERVER_JSON not found. Running fetch_all_runcloud_servers..."
+    fetch_all_runcloud_servers
+
+    if [[ ! -f "$SERVER_JSON" ]]; then
+      echo "❌ Failed to generate $SERVER_JSON. Aborting."
+      exit 1
+    fi
+  fi
+
+
 
   while IFS= read -r row; do
     id=$(jq -r '.id' <<< "$row")
