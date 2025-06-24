@@ -170,7 +170,7 @@ run_script() {
 # Output includes basic table headers for disk, RAM, and CPU usage.
 # ────────────────────────────────────────────────────────────────
 setup_html_report() {
-  REPORT_FILE="/tmp/server_usage_report_$(date +%Y%m%d_%H%M%S).html"
+  REPORT_FILE="/tmp/server_heals_report.html"
   cat <<EOF > "$REPORT_FILE"
 <html><head>
  <style>
@@ -200,7 +200,22 @@ EOF
 # using msmtp. Assumes $NOTIFY_EMAIL and $REPORT_FILE are set.
 # ────────────────────────────────────────────────────────────────
 send_html_report() {
-  echo "</table></body></html>" >> "$REPORT_FILE"
+  {
+    echo "</table>"
+
+    echo "<hr><h3>⚠️ Summary of Critical Issues</h3>"
+    if (( ${#ERROR_SUMMARY[@]} > 0 )); then
+      echo "<ul>"
+      for err in "${ERROR_SUMMARY[@]}"; do
+        echo "<li>$err</li>"
+      done
+      echo "</ul>"
+    else
+      echo "<p>✅ No critical issues detected.</p>"
+    fi
+
+    echo "</body></html>"
+  } >> "$REPORT_FILE"
 
   (
     echo "To: $NOTIFY_EMAIL"
@@ -231,8 +246,9 @@ run_for_all_servers() {
     if run_script "$SCRIPT_FOLDER" "$server_ip" "$server_id" "$server_name"; then
       echo "✅ Success for $server_name ($server_ip)"
     else
-      echo "❌ Failed for $server_name ($server_ip)"
-      FAILED+=("$server_ip")
+      error_msg="❌ Failed for $server_name ($server_ip)"
+      echo "$error_msg"
+      ERROR_SUMMARY+=("$error_msg")
     fi
 
     echo "--------------------------------------------------------"

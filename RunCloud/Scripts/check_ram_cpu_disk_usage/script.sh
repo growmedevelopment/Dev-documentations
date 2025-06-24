@@ -74,7 +74,28 @@ append_summary() {
     <td>${unalloc} GB</td>
     <td>$ram_colored</td>
     <td>$cpu_colored</td>
-  </tr>" >> "${REPORT_FILE:-/tmp/fallback_report.html}"
+  </tr>" >> "${REPORT_FILE:-/tmp/server_heals_report.html}"
+
+  # Check for critical issues
+    error_message="❗ $ip -"
+    has_error=false
+
+    if [[ $used_pct -ge 90 ]]; then
+      error_message+=" High Disk: ${used_pct}%"
+      has_error=true
+    fi
+    if [[ $ram -ge 90 ]]; then
+      error_message+=" High RAM: ${ram}%"
+      has_error=true
+    fi
+    if [[ $cpu -ge 90 ]]; then
+      error_message+=" High CPU: ${cpu}%"
+      has_error=true
+    fi
+
+    if [[ "$has_error" == true ]]; then
+      ERROR_SUMMARY+=("$error_message")
+    fi
 }
 
 main() {

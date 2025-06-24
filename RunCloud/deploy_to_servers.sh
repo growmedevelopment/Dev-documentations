@@ -8,7 +8,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_FOLDER="ssh_injection"
+SCRIPT_FOLDER="check_ram_cpu_disk_usage"
 #SCRIPT_FOLDER="${1:-ssh_injection}"
 #./main.sh check_ram_cpu_disk_usage
 
@@ -19,7 +19,7 @@ REPORT_FILE=""
 # ────────────────────────────────────────────────────────────────
 # Handler for RAM/CPU/Disk usage summary + email
 # ────────────────────────────────────────────────────────────────
-
+ERROR_SUMMARY=()
 handle_check_usage() {
   echo "📂 Running $SCRIPT_FOLDER using server IPs"
   setup_html_report
