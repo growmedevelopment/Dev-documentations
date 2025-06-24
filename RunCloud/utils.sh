@@ -76,9 +76,9 @@ fetch_vultr_servers() {
   echo "📄 Server data saved to $JSON_FILE"
 }
 
-### 📡 Fetch from RunCloude
+### 📡 Fetch minimal server info from RunCloud and save to servers.json
 fetch_all_runcloud_servers() {
-  local fresh_file="$ROOT_DIR/servers_runcloud_fresh.json"
+  local output_file="$ROOT_DIR/servers.json"
   declare -a temp_entries=()
   local page=1
 
@@ -86,19 +86,19 @@ fetch_all_runcloud_servers() {
 
   while true; do
     echo "📦 Requesting page $page..."
+
     response=$(curl -sS -X GET \
       "https://manage.runcloud.io/api/v3/servers?page=$page&perPage=40" \
       -H "Authorization: Bearer $RUNCLOUD_API_TOKEN" \
       -H "Accept: application/json")
 
-    entries=$(echo "$response" | jq -c '.data[]' 2>/dev/null || true)
+    entries=$(echo "$response" | jq -c '.data[] | {id, name, ipAddress}' 2>/dev/null || true)
     [[ -z "$entries" ]] && break
 
     while IFS= read -r entry; do
       temp_entries+=("$entry")
     done <<< "$entries"
 
-    # If fewer than 40 entries, no more pages
     count=$(echo "$entries" | wc -l)
     (( count < 40 )) && break
 
@@ -106,12 +106,12 @@ fetch_all_runcloud_servers() {
   done
 
   if [[ ${#temp_entries[@]} -eq 0 ]]; then
-    echo "❌ No server data returned from RunCloud API"
+    echo "❌ No simplified server data returned from RunCloud API"
     return 1
   fi
 
-  jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr' > "$fresh_file"
-  echo "📥 Cached ${#temp_entries[@]} server entries to $fresh_file"
+  jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr' > "$output_file"
+  echo "📥 Wrote ${#temp_entries[@]} simplified server entries to $output_file"
 }
 
 ### 🧠 Load Static IPs
@@ -120,13 +120,15 @@ get_all_servers_from_file() {
   SERVER_LIST=()
 
   if [[ ! -f "$JSON_FILE" ]]; then
-      echo "📁 Creating missing $JSON_FILE..."
-      mkdir -p "$(dirname "$JSON_FILE")"
-      echo "[]" > "$JSON_FILE"
+    echo "📁 Creating missing $JSON_FILE..."
+    mkdir -p "$(dirname "$JSON_FILE")"
+    echo "[]" > "$JSON_FILE"
   fi
 
   echo "📄 Loading server IPs from $JSON_FILE..."
   mapfile -t SERVER_LIST < <(jq -r '.[].ipAddress' "$JSON_FILE")
+
+  echo "📦 Loaded ${#SERVER_LIST[@]} servers from file"
 }
 
 run_script() {
@@ -144,4 +146,91 @@ run_script() {
 
   # Forward all remaining arguments
   "$SCRIPT_PATH" "$@"
+}
+
+
+# ────────────────────────────────────────────────────────────────
+# Generates the beginning of an HTML report for server usage.
+# This sets the global variable REPORT_FILE to a new temp file.
+# Output includes basic table headers for disk, RAM, and CPU usage.
+# ────────────────────────────────────────────────────────────────
+setup_html_report() {
+  REPORT_FILE="/tmp/server_usage_report_$(date +%Y%m%d_%H%M%S).html"
+  cat <<EOF > "$REPORT_FILE"
+<html><head>
+ <style>
+   body { font-family: sans-serif; }
+   table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+   th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+   th { background-color: #f4f4f4; }
+   td a { color: #0366d6; text-decoration: none; }
+ </style>
+</head><body>
+<h2>📊 RAM / CPU / Disk Usage Summary</h2>
+<p>Generated: $(date)</p>
+<table>
+ <tr>
+   <th>IP Address</th>
+   <th>Total Disk</th>
+   <th>Used Disk</th>
+   <th>Unallocated</th>
+   <th>RAM Usage</th>
+   <th>CPU Usage</th>
+ </tr>
+EOF
+}
+
+
+# ────────────────────────────────────────────────────────────────
+# Appends closing HTML tags to REPORT_FILE and sends it via email
+# using msmtp. Assumes $NOTIFY_EMAIL and $REPORT_FILE are set.
+# ────────────────────────────────────────────────────────────────
+send_html_report() {
+  echo "</table></body></html>" >> "$REPORT_FILE"
+
+  (
+    echo "To: $NOTIFY_EMAIL"
+    echo "Subject: Server Usage Report - $(date)"
+    echo "Content-Type: text/html; charset=UTF-8"
+    echo ""
+    cat "$REPORT_FILE"
+  ) | msmtp "$NOTIFY_EMAIL"
+
+  echo "📧 HTML report sent to $NOTIFY_EMAIL"
+}
+
+
+# ────────────────────────────────────────────────────────────────
+# Iterates over SERVER_LIST and runs the designated script
+# (stored in SCRIPT_FOLDER) on each server IP.
+# If a server fails, it's added to the FAILED array.
+# ────────────────────────────────────────────────────────────────
+run_for_all_servers() {
+  for i in "${!SERVER_LIST[@]}"; do
+    server_ip="${SERVER_LIST[$i]}"
+    echo "[$((i + 1))/${#SERVER_LIST[@]}] → $server_ip"
+
+    if run_script "$SCRIPT_FOLDER" "$server_ip"; then
+      echo "✅ Success for $server_ip"
+    else
+      echo "❌ Failed for $server_ip"
+      FAILED+=("$server_ip")
+    fi
+
+    echo "--------------------------------------------------------"
+  done
+}
+
+# ────────────────────────────────────────────────────────────────
+# Prints a summary at the end of the run.
+# Shows whether all servers succeeded or lists failed ones.
+# ────────────────────────────────────────────────────────────────
+print_summary() {
+  echo -e "\n📋 Summary:"
+  if [[ "${#FAILED[@]}" -eq 0 ]]; then
+    echo "✅ All servers completed successfully."
+  else
+    echo "❌ Failed on:"
+    printf ' - %s\n' "${FAILED[@]}"
+  fi
 }
