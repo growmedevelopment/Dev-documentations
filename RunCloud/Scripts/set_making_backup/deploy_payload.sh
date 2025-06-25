@@ -7,7 +7,7 @@ echo "🚀 Starting remote deployment on $(hostname)"
 echo "🔧 Configuring automatic service restarts for unattended upgrades..."
 sed -i 's/#$nrconf{restart} = .*/$nrconf{restart} = '"'a'"';/' /etc/needrestart/needrestart.conf
 
-# === 1. Install Dependencies (AWS CLI, mail, etc.) ===
+# === 1. Install Dependencies (mail, etc.) ===
 echo "📦 Ensuring dependencies are installed..."
 
 # Wait for existing apt processes to release locks
@@ -36,16 +36,6 @@ fi
 DEBIAN_FRONTEND=noninteractive apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip mailutils libsasl2-modules
 
-if ! command -v aws >/dev/null 2>&1 || ! [[ "$(aws --version 2>/dev/null)" =~ "aws-cli/2" ]]; then
-  echo "  -> Installing AWS CLI v2..."
-  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
-  unzip -q /tmp/awscliv2.zip -d /tmp
-  /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
-  rm -rf /tmp/awscliv2.zip /tmp/aws
-  echo "  -> AWS CLI v2 installed."
-else
-  echo "  -> AWS CLI v2 is already installed."
-fi
 
 # === 2. Install and Configure rclone for Vultr Object Storage ===
 echo "⚙️ Installing and configuring rclone for Vultr..."
@@ -213,14 +203,12 @@ main() {
 
     # --- Cleanup old backups for this app (Consider S3 Lifecycle Policies as an alternative) ---
     echo "🔍 Cleaning $APP backups for $MODE"
-    aws s3 ls "s3://$VULTR_BUCKET/$APP/$MODE/" --endpoint-url "$VULTR_ENDPOINT" | while read -r line; do
-      FILE_DATE=$(echo "$line" | awk '{print $1}')
-      FILE_NAME=$(echo "$line" | awk '{for (i=4; i<=NF; i++) printf $i" "; print ""}' | xargs)
-      [ -z "$FILE_NAME" ] && continue
-      FILE_TIMESTAMP=$(date -d "$FILE_DATE" +%s)
+    rclone lsf --format "t" "vultr:$VULTR_BUCKET/$APP/$MODE/" --absolute | while read -r FILE; do
+      FILE_NAME=$(basename "$FILE")
+      FILE_TIMESTAMP=$(date -d "$(rclone lsl "vultr:$VULTR_BUCKET/$APP/$MODE/$FILE_NAME" | awk '{print $2, $3}')" +%s)
       if [ "$FILE_TIMESTAMP" -lt "$CUTOFF_DATE" ]; then
         echo "🗑️ Deleting old backup: $FILE_NAME"
-        aws s3 rm "s3://$VULTR_BUCKET/$APP/$MODE/$FILE_NAME" --endpoint-url "$VULTR_ENDPOINT"
+        rclone delete "vultr:$VULTR_BUCKET/$APP/$MODE/$FILE_NAME"
       fi
     done
   done
@@ -287,7 +275,7 @@ VULTR_ENDPOINT="https://sjc1.vultrobjects.com"
 list_backups() {
   local app="$1"
   local mode="$2"
-  aws s3 ls "s3://${VULTR_BUCKET}/${app}/${mode}/" --endpoint-url "$VULTR_ENDPOINT" | awk '{print $4}'
+  rclone lsf "vultr:${VULTR_BUCKET}/${app}/${mode}/"
 }
 
 # === User Inputs (Improved) ===
@@ -347,7 +335,7 @@ fi
 if [ ! -f "$LOCAL_ARCHIVE_PATH" ]; then
   echo "📡 Downloading $ARCHIVE from Vultr..."
   mkdir -p "${BACKUP_DIR}/${MODE}"
-  aws s3 cp "s3://${VULTR_BUCKET}/${APP}/${MODE}/${ARCHIVE}" "$LOCAL_ARCHIVE_PATH" --endpoint-url "$VULTR_ENDPOINT" || {
+  rclone copy "vultr:${VULTR_BUCKET}/${APP}/${MODE}/${ARCHIVE}" "$BACKUP_DIR/${MODE}/" --progress || {
     echo "❌ Failed to download backup from Vultr."
     exit 1
   }
