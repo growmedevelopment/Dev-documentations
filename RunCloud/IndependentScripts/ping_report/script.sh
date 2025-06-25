@@ -19,15 +19,18 @@ jq -r '.[].ipAddress' "$SERVER_JSON" > "$IP_LIST_FILE"
 # 2. Upload IP list to server
 scp "$IP_LIST_FILE" "$REMOTE_USER@$REMOTE_IP:/root/server_ips.txt"
 
-
 NOTIFY_EMAIL_ESCAPED="${NOTIFY_EMAIL//\"/\\\"}"
+
 # 3. Create ping_report.sh on the remote server
 ssh "$REMOTE_USER@$REMOTE_IP" "cat > /root/ping_report.sh" <<EOF
 #!/bin/bash
 set -euo pipefail
 
+trap 'ERR_LINE=\$LINENO; echo "❌ ping_report.sh FAILED on \$(hostname) at \$(date)\nLine: \$ERR_LINE" | mail -s "Ping Report FAILED" "$NOTIFY_EMAIL_ESCAPED"' ERR
+
 IP_LIST_FILE="/root/server_ips.txt"
 HTML_REPORT="/tmp/server_ping_report.html"
+LOG_FILE="/var/log/ping_debug.log"
 NOTIFY_EMAIL="$NOTIFY_EMAIL_ESCAPED"
 
 # Ensure sendmail is installed
@@ -36,7 +39,9 @@ if ! command -v sendmail &>/dev/null; then
   apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y sendmail
 fi
 
-# Generate HTML report
+# Start fresh log
+echo "=== Ping Report Log - \$(date) ===" > "\$LOG_FILE"
+
 cat > "\$HTML_REPORT" <<EOT
 Subject: 📡 Server Uptime Report - \$(date '+%Y-%m-%d %H:%M')
 MIME-Version: 1.0
@@ -71,12 +76,13 @@ EOT
 
 while IFS= read -r IP; do
   [[ -z "\$IP" ]] && continue
-  PING_RESULT=\$(ping -c 1 -W 2 "\$IP" 2>/dev/null)
-  if [[ $? -eq 0 ]]; then
+  echo "Pinging \$IP..." >> "\$LOG_FILE"
+  if PING_RESULT=\$(ping -c 1 -W 2 "\$IP" 2>/dev/null); then
     TIME=\$(echo "\$PING_RESULT" | grep 'time=' | sed -E 's/.*time=([0-9.]+).*/\1 ms/')
     echo "<tr class='up'><td>\$IP</td><td>UP</td><td>\$TIME</td></tr>" >> "\$HTML_REPORT"
   else
     echo "<tr class='down'><td>\$IP</td><td>DOWN</td><td>N/A</td></tr>" >> "\$HTML_REPORT"
+    echo "Failed to ping \$IP" >> "\$LOG_FILE"
   fi
 done < "\$IP_LIST_FILE"
 
