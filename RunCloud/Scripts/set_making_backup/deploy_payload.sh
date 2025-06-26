@@ -192,13 +192,13 @@ main() {
    if [ -f "$TAR_PATH" ]; then
      echo "📤 Uploading $TAR_PATH to Vultr with rclone..."
      if rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P; then
-       echo "✅ Backup and upload successful for $APP" >> /root/backup_success.log
+       echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Backup and upload successful for $APP" >> /root/backup_success.log
        rm -rf "$TMP" "$TAR_PATH"
      else
-       error_notify "❌ Upload failed for $APP using rclone"
+       error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Upload failed for $APP using rclone"
      fi
    else
-     error_notify "❌ Backup file not found for $APP (expected at $TAR_PATH)"
+     error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Backup file not found for $APP (expected at $TAR_PATH)"
    fi
 
     # --- Cleanup old backups for this app (Consider S3 Lifecycle Policies as an alternative) ---

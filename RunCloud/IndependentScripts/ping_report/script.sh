@@ -6,15 +6,55 @@ REMOTE_USER="root"
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/../../utils.sh"
 load_env
-fetch_vultr_servers
 
-echo "${NOTIFY_EMAIL}"
-
-SERVER_JSON="$ROOT_DIR/servers.json"
 IP_LIST_FILE="/tmp/server_ips.txt"
+JSON_FILE="/tmp/fresh_servers.json"
+page=1
+first=true
 
-# 1. Generate IP list from local JSON
-jq -r '.[].ipAddress' "$SERVER_JSON" > "$IP_LIST_FILE"
+# Start JSON array
+echo "[" > "$JSON_FILE"
+
+while true; do
+  response=$(curl -s -H "Authorization: Bearer $VULTR_API_TOKEN" \
+    "https://api.vultr.com/v2/instances?page=$page&per_page=500")
+
+  if echo "$response" | jq -e '.instances | type == "array"' >/dev/null; then
+    count=$(echo "$response" | jq '.instances | length')
+    echo "📦 Page $page: $count instances"
+
+    entries=$(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, ipAddress: .main_ip}')
+    while read -r entry; do
+      if [[ "$first" == true ]]; then
+        echo "$entry" >> "$JSON_FILE"
+        first=false
+      else
+        echo ",$entry" >> "$JSON_FILE"
+      fi
+    done <<< "$entries"
+  else
+    echo "❌ API error on page $page"
+    echo "$response"
+    echo "]" >> "$JSON_FILE"
+    exit 1
+  fi
+
+  next=$(echo "$response" | jq -r '.meta.links.next // empty')
+  [[ -z "$next" || "$next" == "null" ]] && break
+  ((page++))
+  sleep 0.05
+done
+
+# Close JSON array
+echo "]" >> "$JSON_FILE"
+
+# Generate IP list from that JSON
+jq -r '.[].ipAddress' "$JSON_FILE" > "$IP_LIST_FILE"
+
+if [[ ! -s "$IP_LIST_FILE" ]]; then
+  echo "❌ No IP addresses found. Aborting."
+  exit 1
+fi
 
 # 2. Upload IP list to server
 scp "$IP_LIST_FILE" "$REMOTE_USER@$REMOTE_IP:/root/server_ips.txt"
@@ -101,5 +141,8 @@ ssh "$REMOTE_USER@$REMOTE_IP" "chmod +x /root/ping_report.sh"
 
 # 5. Schedule cron job
 ssh "$REMOTE_USER@$REMOTE_IP" 'echo "0 0 * * * root /root/ping_report.sh" > /etc/cron.d/ping_report && chmod 644 /etc/cron.d/ping_report'
+
+# 6. Clean up temporary files
+rm -f "$JSON_FILE" "$IP_LIST_FILE"
 
 echo "✅ ping_report.sh deployed and scheduled via cron on $REMOTE_IP"
