@@ -85,6 +85,44 @@ postmap /etc/postfix/sasl_passwd
 systemctl restart postfix
 echo "✅ Postfix relay configured."
 
+# Ensure /var/log/mail.log is configured correctly (one-time setup)
+MAIL_LOG="/var/log/mail.log"
+MAIL_OWNER="syslog"
+MAIL_GROUP="adm"
+NEEDS_FIX=0
+
+# Check if log file exists
+if [ ! -f "$MAIL_LOG" ]; then
+  touch "$MAIL_LOG"
+  NEEDS_FIX=1
+fi
+
+# Check ownership
+current_owner=$(stat -c '%U' "$MAIL_LOG")
+current_group=$(stat -c '%G' "$MAIL_LOG")
+if [ "$current_owner" != "$MAIL_OWNER" ] || [ "$current_group" != "$MAIL_GROUP" ]; then
+  chown "$MAIL_OWNER:$MAIL_GROUP" "$MAIL_LOG"
+  NEEDS_FIX=1
+fi
+
+# Check permissions
+current_perm=$(stat -c '%a' "$MAIL_LOG")
+if [ "$current_perm" != "640" ]; then
+  chmod 640 "$MAIL_LOG"
+  NEEDS_FIX=1
+fi
+
+# Restart services only if changes were made
+if [ "$NEEDS_FIX" -eq 1 ]; then
+  echo "Fixing mail log permissions/ownership, restarting rsyslog and postfix..."
+  systemctl restart rsyslog
+  systemctl restart postfix
+else
+  echo "Mail log permissions and ownership are already correct."
+fi
+
+
+
 # === 4. Deploy Automated Backup Script ===
 echo "📜 Deploying automated backup script to /root/full_vultr_backup.sh..."
 # Use a quoted 'EOS' to prevent the shell from expanding variables like "$@" or "$1" inside the heredoc.
@@ -101,12 +139,27 @@ DISK_PATH="/"
 LOG_FILE="/root/backup_failure.log"
 
 # --- Error handler ---
+log_debug() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') 🐛 $1" >> /tmp/backup_debug.log
+}
+
 error_notify() {
   local MSG="$1"
+  log_debug "📧 ADMIN_EMAIL is: $ADMIN_EMAIL"
+  log_debug "🔔 error_notify() triggered with message: $MSG"
   echo "❌ $MSG" | tee -a "$LOG_FILE"
-  echo -e "🚨 Backup failed on $(hostname) at $(date)\n\n$MSG" | mail -s "🚨 FULL BACKUP FAILURE - $(hostname)" "$ADMIN_EMAIL"
+  if echo -e "🚨 Backup failed on $(hostname) at $(date)\n\n$MSG" \
+    | mail -s "🚨 FULL BACKUP FAILURE - $(hostname)" "$ADMIN_EMAIL" 2>> /tmp/mail_error.log; then
+    log_debug "📧 Email successfully sent to $ADMIN_EMAIL"
+  else
+    log_debug "❌ Failed to send email to $ADMIN_EMAIL (see /tmp/mail_error.log)"
+  fi
 }
+
 trap 'error_notify "Unexpected script error at line $LINENO"' ERR
+
+
+
 
 # --- Ensure 'mail' is installed ---
 if ! command -v mail >/dev/null 2>&1; then
@@ -191,10 +244,13 @@ main() {
    # --- Upload to Vultr using rclone ---
    if [ -f "$TAR_PATH" ]; then
      echo "📤 Uploading $TAR_PATH to Vultr with rclone..."
-     if rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P; then
+     log_debug "📤 Uploading $TAR_PATH to Vultr..."
+     if timeout 10m rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P; then
+       log_debug "✅ Upload successful for $APP"
        echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Backup and upload successful for $APP" >> /root/backup_success.log
        rm -rf "$TMP" "$TAR_PATH"
      else
+       log_debug "❌ Upload failed or timed out for $APP"
        error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Upload failed for $APP using rclone"
      fi
    else
