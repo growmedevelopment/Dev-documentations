@@ -275,9 +275,27 @@ main() {
   echo "✅ Backup script finished for mode: $MODE"
 }
 
-# The "$@" is now safe because the heredoc is quoted and the shell won't expand it here.
-# The script itself will handle it correctly when it runs.
-[[ "${BASH_SOURCE[0]}" == "$0" ]] && main "$@"
+
+# === Retry Logic for Entire Backup Script ===
+MAX_RETRIES=3
+RETRY_DELAY=3600  # 1 hour in seconds
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  for attempt in $(seq 1 $MAX_RETRIES); do
+    echo "🔁 Running backup attempt $attempt/$MAX_RETRIES at $(date)"
+    if main "$@"; then
+      echo "✅ Backup succeeded on attempt $attempt"
+      exit 0
+    elif [[ $attempt -lt $MAX_RETRIES ]]; then
+      echo "⚠️ Backup attempt $attempt failed. Retrying in $((RETRY_DELAY/60)) minutes..."
+      sleep $RETRY_DELAY
+    else
+      echo "❌ Backup failed after $MAX_RETRIES attempts."
+      error_notify "❌ Backup script failed after $MAX_RETRIES attempts on $(hostname) at $(date)"
+      exit 1
+    fi
+  done
+fi
 EOS
 
 # Safely inject the email address using sed after the file is created.
