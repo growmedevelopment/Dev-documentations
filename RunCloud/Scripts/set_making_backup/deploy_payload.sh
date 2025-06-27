@@ -245,7 +245,7 @@ main() {
    if [ -f "$TAR_PATH" ]; then
      echo "📤 Uploading $TAR_PATH to Vultr with rclone..."
      log_debug "📤 Uploading $TAR_PATH to Vultr..."
-     if timeout 10m rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P; then
+     if timeout 1h rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P; then
        log_debug "✅ Upload successful for $APP"
        echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Backup and upload successful for $APP" >> /root/backup_success.log
        rm -rf "$TMP" "$TAR_PATH"
