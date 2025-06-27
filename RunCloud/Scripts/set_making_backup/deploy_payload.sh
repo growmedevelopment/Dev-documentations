@@ -219,7 +219,7 @@ main() {
 
       echo "🔐 Dumping database for $APP..."
       if ! mysqldump -u"$DB_USER" --password="$DB_PASS" --skip-comments "$DB_NAME" > "$TMP/db.sql" 2>> "$LOG_FILE"; then
-        error_notify "❌ Database backup failed for $APP (mysqldump error)"
+        error_notify "❌ Database backup failed for $APP (mysqldump error) on server $SERVER_IP"
         continue
       fi
     fi
@@ -251,7 +251,7 @@ main() {
        rm -rf "$TMP" "$TAR_PATH"
      else
        log_debug "❌ Upload failed or timed out for $APP"
-       error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Upload failed for $APP using rclone"
+       error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Upload failed for $APP using rclone on server $SERVER_IP"
      fi
    else
      error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Backup file not found for $APP (expected at $TAR_PATH)"
