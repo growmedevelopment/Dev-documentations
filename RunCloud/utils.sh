@@ -114,6 +114,108 @@ fetch_all_runcloud_servers() {
   echo "📥 Wrote ${#temp_entries[@]} simplified server entries to $output_file"
 }
 
+fetch_all_runcloud_servers2() {
+
+  declare -a temp_entries=()
+  local page=1
+
+  echo "🔄 Fetching all servers from RunCloud (paginated, 40 per page)..." >&2
+
+  while true; do
+    echo "📦 Requesting page $page..." >&2
+
+    response=$(curl -sS -X GET \
+      "https://manage.runcloud.io/api/v3/servers?page=$page&perPage=40" \
+      -H "Authorization: Bearer $RUNCLOUD_API_TOKEN" \
+      -H "Accept: application/json")
+
+    entries=$(echo "$response" | jq -c '.data[] | {id, name, ipAddress}' 2>/dev/null || true)
+    [[ -z "$entries" ]] && break
+
+    while IFS= read -r entry; do
+      temp_entries+=("$entry")
+    done <<< "$entries"
+
+    count=$(echo "$entries" | wc -l)
+    (( count < 40 )) && break
+
+    ((page++))
+  done
+
+  if [[ ${#temp_entries[@]} -eq 0 ]]; then
+    echo "❌ No server data returned from RunCloud API" >&2
+    return 1
+  fi
+
+  jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr'
+}
+
+
+
+fetch_all_runcloud_apps() {
+   echo "🌐 Fetching all servers from RunCloud..."
+
+   local all_servers_json
+   if ! all_servers_json=$(fetch_all_runcloud_servers2); then
+     echo "❌ Failed to fetch servers."
+     return 1
+   fi
+
+   mapfile -t server_ids < <(echo "$all_servers_json" | jq -r '.[].id')
+   mapfile -t server_names < <(echo "$all_servers_json" | jq -r '.[].name')
+
+   if [[ ${#server_ids[@]} -eq 0 ]]; then
+     echo "❌ No servers found."
+     return 1
+   fi
+
+   declare -a all_apps_local=()
+
+   for idx in "${!server_ids[@]}"; do
+     server_id="${server_ids[$idx]}"
+     server_name="${server_names[$idx]}"
+     echo "📡 Processing server: $server_name (ID: $server_id)"
+
+     local page=1
+     local more=true
+     while $more; do
+       echo "   🔎 Fetching apps page $page from server: $server_name (ID: $server_id)"
+       local response
+       response=$(curl -s --location --request GET "https://manage.runcloud.io/api/v3/servers/$server_id/webapps?sortColumn=name&sortDirection=asc&page=$page" \
+         --header "$AUTH_HEADER" --header "Accept: application/json")
+       if ! echo "$response" | jq -e '.data' >/dev/null 2>&1; then
+         echo "⚠️ Failed to fetch apps for server $server_id on page $page. Skipping."
+         break
+       fi
+       local page_apps
+       page_apps=$(echo "$response" | jq -r '.data[]?.name')
+       if [[ -n "$page_apps" ]]; then
+         while IFS= read -r app_name; do
+           all_apps_local+=("$app_name")
+         done <<< "$page_apps"
+       fi
+       local total_pages
+       total_pages=$(echo "$response" | jq '.meta.pagination.total_pages // 1')
+       (( page >= total_pages )) && more=false || ((page++))
+     done
+   done
+
+   if [[ ${#all_apps_local[@]} -eq 0 ]]; then
+     echo "❌ No apps found across servers."
+     return 1
+   fi
+
+   jq -n --argjson arr "$(printf '%s\n' "${all_apps_local[@]}" | jq -R . | jq -s .)" '$arr'
+ }
+
+# === Fetch all backups folders ===
+fetch_all_vultr_backups_folders() {
+  echo "☁️ Listing top-level folders in bucket: runcloud-app-backups"
+  folders=()
+  while IFS= read -r line; do
+    folders+=("$line")
+  done < <(aws s3 ls "s3://runcloud-app-backups/" --endpoint-url "https://sjc1.vultrobjects.com" | awk '/PRE/ {print $2}' | sed 's#/##')
+}
 
 # ────────────────────────────────────────────────────────────────
 # Creates an empty servers.json file with a JSON array: []
