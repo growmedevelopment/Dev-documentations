@@ -58,7 +58,7 @@ generate_report() {
 echo "🚦 Starting removed servers check..."
 
 vultr_data=$(fetch_all_vultr_servers2)
-runcloud_data=$(fetch_all_runcloud_servers2)
+runcloud_data=$(fetch_all_runcloud_servers)
 
 
 removed_servers=$(get_removed_servers "$vultr_data" "$runcloud_data")

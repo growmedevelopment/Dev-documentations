@@ -44,7 +44,8 @@ detect_timeout_cmd
 
 if [[ "$SCRIPT_FOLDER" == "ssh_injection" ]]; then
   create_or_clear_servers_json_file
-  fetch_all_runcloud_servers
+  runcloud_data=$(fetch_all_runcloud_servers)
+  save_runcloud_servers_to_file "$runcloud_data"
 else
   # Only fetch if file doesn't exist or is empty
   if [[ ! -f "$SERVER_JSON" || $(jq 'length' "$SERVER_JSON") -eq 0 ]]; then

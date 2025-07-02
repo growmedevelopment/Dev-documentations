@@ -76,46 +76,7 @@ fetch_vultr_servers() {
   echo "📄 Server data saved to $JSON_FILE"
 }
 
-### 📡 Fetch minimal server info from RunCloud and save to servers.json
 fetch_all_runcloud_servers() {
-  local output_file="$ROOT_DIR/servers.json"
-  declare -a temp_entries=()
-  local page=1
-
-  echo "🔄 Fetching server list from RunCloud (paginated, 40 per page)..."
-
-  while true; do
-    echo "📦 Requesting page $page..."
-
-    response=$(curl -sS -X GET \
-      "https://manage.runcloud.io/api/v3/servers?page=$page&perPage=40" \
-      -H "Authorization: Bearer $RUNCLOUD_API_TOKEN" \
-      -H "Accept: application/json")
-
-    entries=$(echo "$response" | jq -c '.data[] | {id, name, ipAddress}' 2>/dev/null || true)
-    [[ -z "$entries" ]] && break
-
-    while IFS= read -r entry; do
-      temp_entries+=("$entry")
-    done <<< "$entries"
-
-    count=$(echo "$entries" | wc -l)
-    (( count < 40 )) && break
-
-    ((page++))
-  done
-
-  if [[ ${#temp_entries[@]} -eq 0 ]]; then
-    echo "❌ No simplified server data returned from RunCloud API"
-    return 1
-  fi
-
-  jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr' > "$output_file"
-  echo "📥 Wrote ${#temp_entries[@]} simplified server entries to $output_file"
-}
-
-### //todo switch fetch_all_runcloud_servers with fetch_all_runcloud_servers2
-fetch_all_runcloud_servers2() {
 
   declare -a temp_entries=()
   local page=1
@@ -150,6 +111,18 @@ fetch_all_runcloud_servers2() {
 
   jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr'
 }
+
+save_runcloud_servers_to_file() {
+  local json_data="$1"
+  local output_file="$ROOT_DIR/servers.json"
+
+  echo "💾 Saving server data to $output_file" >&2
+  echo "$json_data" > "$output_file"
+  echo "📥 Wrote $(jq length <<< "$json_data") server entries to $output_file" >&2
+}
+
+
+
 fetch_all_vultr_servers2() {
   echo "🔄 Fetching servers from Vultr (paginated)..." >&2
 
@@ -240,7 +213,7 @@ fetch_all_runcloud_apps() {
    echo "🌐 Fetching all servers from RunCloud..."
 
    local all_servers_json
-   if ! all_servers_json=$(fetch_all_runcloud_servers2); then
+   if ! all_servers_json=$(fetch_all_runcloud_servers); then
      echo "❌ Failed to fetch servers."
      return 1
    fi
