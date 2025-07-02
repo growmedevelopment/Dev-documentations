@@ -37,52 +37,6 @@ detect_timeout_cmd() {
   fi
 }
 
-### 📡 fetch_vultr_servers
-# Fetches all Vultr servers using paginated API requests.
-# Outputs a JSON array saved directly to $ROOT_DIR/servers.json.
-fetch_vultr_servers() {
-  echo "📡 Fetching from Vultr API..."
-  local JSON_FILE="$ROOT_DIR/servers.json"
-  local page=1
-  > "$JSON_FILE"
-  echo "[" > "$JSON_FILE"
-  local first=true
-
-  while true; do
-    response=$(curl -s -H "Authorization: Bearer $VULTR_API_TOKEN" \
-      "https://api.vultr.com/v2/instances?page=$page&per_page=500")
-
-    if echo "$response" | jq -e '.instances | type == "array"' >/dev/null; then
-      local count
-      count=$(echo "$response" | jq '.instances | length')
-      echo "📦 Page $page: $count instances"
-
-      entries=$(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, ipAddress: .main_ip}')
-      while read -r entry; do
-        if [[ "$first" == true ]]; then
-          echo "$entry" >> "$JSON_FILE"
-          first=false
-        else
-          echo ",$entry" >> "$JSON_FILE"
-        fi
-      done <<< "$entries"
-    else
-      echo "❌ API error on page $page"
-      echo "$response"
-      echo "]" >> "$JSON_FILE"
-      return 1
-    fi
-
-    next=$(echo "$response" | jq -r '.meta.links.next // empty')
-    [[ -z "$next" || "$next" == "null" ]] && break
-    ((page++))
-    sleep 0.05
-  done
-
-  echo "]" >> "$JSON_FILE"
-  echo "📄 Server data saved to $JSON_FILE"
-}
-
 ### 📡 fetch_all_vultr_servers
 # Fetches all Vultr servers with paginated API requests.
 # Outputs a JSON array to stdout; does not write to file.
@@ -167,9 +121,9 @@ fetch_all_runcloud_servers() {
   jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr'
 }
 
-### 💾 save_runcloud_servers_to_file
+### 💾 save_servers_to_file
 # Saves provided JSON data to $ROOT_DIR/servers.json.
-save_runcloud_servers_to_file() {
+fetch_all_vultr_servers() {
   local json_data="$1"
   local output_file="$ROOT_DIR/servers.json"
 
