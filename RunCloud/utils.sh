@@ -192,14 +192,14 @@ fetch_all_runcloud_apps() {
  }
 
 ### ☁️ fetch_all_vultr_backups_folders
-# Lists top-level folders in Vultr object storage bucket for backups.
+# Lists top-level folders in Vultr object storage bucket for backups using rclone.
 # Populates 'folders' array variable with folder names.
 fetch_all_vultr_backups_folders() {
-  echo "☁️ Listing top-level folders in bucket: runcloud-app-backups"
+  echo "☁️ Listing top-level folders in bucket: runcloud-app-backups via rclone"
   folders=()
   while IFS= read -r line; do
     folders+=("$line")
-  done < <(aws s3 ls "s3://runcloud-app-backups/" --endpoint-url "https://sjc1.vultrobjects.com" | awk '/PRE/ {print $2}' | sed 's#/##')
+  done < <(rclone lsf vultr:runcloud-app-backups/ --dirs-only)
 }
 
 ### 📁 create_or_clear_servers_json_file
