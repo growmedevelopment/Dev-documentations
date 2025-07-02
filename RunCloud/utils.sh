@@ -3,7 +3,9 @@
 # Get project root
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-### 🔐 Load .env
+### 🔐 load_env
+# Loads environment variables from .env file at project root.
+# Exits with error if required vars are missing (VULTR_API_TOKEN, NOTIFY_EMAIL).
 load_env() {
   ENV_FILE="$ROOT_DIR/.env"
   if [[ -f "$ENV_FILE" ]]; then
@@ -21,7 +23,9 @@ load_env() {
   fi
 }
 
-### ⏱️ Detect Timeout Command
+### ⏱️ detect_timeout_cmd
+# Detects whether 'timeout' or 'gtimeout' is available for command timeouts.
+# Exits with error if neither is found.
 detect_timeout_cmd() {
   if command -v timeout &>/dev/null; then
     TIMEOUT_CMD="timeout"
@@ -33,6 +37,9 @@ detect_timeout_cmd() {
   fi
 }
 
+### 📡 fetch_vultr_servers
+# Fetches all Vultr servers using paginated API requests.
+# Outputs a JSON array saved directly to $ROOT_DIR/servers.json.
 fetch_vultr_servers() {
   echo "📡 Fetching from Vultr API..."
   local JSON_FILE="$ROOT_DIR/servers.json"
@@ -76,52 +83,9 @@ fetch_vultr_servers() {
   echo "📄 Server data saved to $JSON_FILE"
 }
 
-fetch_all_runcloud_servers() {
-
-  declare -a temp_entries=()
-  local page=1
-
-  echo "🔄 Fetching all servers from RunCloud (paginated, 40 per page)..." >&2
-
-  while true; do
-    echo "📦 Requesting page $page..." >&2
-
-    response=$(curl -sS -X GET \
-      "https://manage.runcloud.io/api/v3/servers?page=$page&perPage=40" \
-      -H "Authorization: Bearer $RUNCLOUD_API_TOKEN" \
-      -H "Accept: application/json")
-
-    entries=$(echo "$response" | jq -c '.data[] | {id, name, ipAddress}' 2>/dev/null || true)
-    [[ -z "$entries" ]] && break
-
-    while IFS= read -r entry; do
-      temp_entries+=("$entry")
-    done <<< "$entries"
-
-    count=$(echo "$entries" | wc -l)
-    (( count < 40 )) && break
-
-    ((page++))
-  done
-
-  if [[ ${#temp_entries[@]} -eq 0 ]]; then
-    echo "❌ No server data returned from RunCloud API" >&2
-    return 1
-  fi
-
-  jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr'
-}
-
-save_runcloud_servers_to_file() {
-  local json_data="$1"
-  local output_file="$ROOT_DIR/servers.json"
-
-  echo "💾 Saving server data to $output_file" >&2
-  echo "$json_data" > "$output_file"
-  echo "📥 Wrote $(jq length <<< "$json_data") server entries to $output_file" >&2
-}
-
-
+### 📡 fetch_all_vultr_servers
+# Fetches all Vultr servers with paginated API requests.
+# Outputs a JSON array to stdout; does not write to file.
 fetch_all_vultr_servers() {
   echo "🔄 Fetching servers from Vultr (paginated)..." >&2
 
@@ -164,6 +128,59 @@ fetch_all_vultr_servers() {
   jq -n --argjson arr "$(printf '%s\n' "${entries[@]}" | jq -s '.')" '$arr'
 }
 
+### 📡 fetch_all_runcloud_servers
+# Fetches all servers from RunCloud API (paginated).
+# Outputs a JSON array of servers directly to stdout; does not save.
+fetch_all_runcloud_servers() {
+
+  declare -a temp_entries=()
+  local page=1
+
+  echo "🔄 Fetching all servers from RunCloud (paginated, 40 per page)..." >&2
+
+  while true; do
+    echo "📦 Requesting page $page..." >&2
+
+    response=$(curl -sS -X GET \
+      "https://manage.runcloud.io/api/v3/servers?page=$page&perPage=40" \
+      -H "Authorization: Bearer $RUNCLOUD_API_TOKEN" \
+      -H "Accept: application/json")
+
+    entries=$(echo "$response" | jq -c '.data[] | {id, name, ipAddress}' 2>/dev/null || true)
+    [[ -z "$entries" ]] && break
+
+    while IFS= read -r entry; do
+      temp_entries+=("$entry")
+    done <<< "$entries"
+
+    count=$(echo "$entries" | wc -l)
+    (( count < 40 )) && break
+
+    ((page++))
+  done
+
+  if [[ ${#temp_entries[@]} -eq 0 ]]; then
+    echo "❌ No server data returned from RunCloud API" >&2
+    return 1
+  fi
+
+  jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr'
+}
+
+### 💾 save_runcloud_servers_to_file
+# Saves provided JSON data to $ROOT_DIR/servers.json.
+save_runcloud_servers_to_file() {
+  local json_data="$1"
+  local output_file="$ROOT_DIR/servers.json"
+
+  echo "💾 Saving server data to $output_file" >&2
+  echo "$json_data" > "$output_file"
+  echo "📥 Wrote $(jq length <<< "$json_data") server entries to $output_file" >&2
+}
+
+### 📡 fetch_all_runcloud_apps
+# Fetches all servers from RunCloud, then retrieves all web apps
+# across those servers, assembling them into a JSON array.
 fetch_all_runcloud_apps() {
    echo "🌐 Fetching all servers from RunCloud..."
 
@@ -220,7 +237,9 @@ fetch_all_runcloud_apps() {
    jq -n --argjson arr "$(printf '%s\n' "${all_apps_local[@]}" | jq -R . | jq -s .)" '$arr'
  }
 
-# === Fetch all backups folders ===
+### ☁️ fetch_all_vultr_backups_folders
+# Lists top-level folders in Vultr object storage bucket for backups.
+# Populates 'folders' array variable with folder names.
 fetch_all_vultr_backups_folders() {
   echo "☁️ Listing top-level folders in bucket: runcloud-app-backups"
   folders=()
@@ -229,11 +248,8 @@ fetch_all_vultr_backups_folders() {
   done < <(aws s3 ls "s3://runcloud-app-backups/" --endpoint-url "https://sjc1.vultrobjects.com" | awk '/PRE/ {print $2}' | sed 's#/##')
 }
 
-# ────────────────────────────────────────────────────────────────
-# Creates an empty servers.json file with a JSON array: []
-# Ensures the directory exists before writing the file.
-# Overwrites any existing file at the same path.
-# ────────────────────────────────────────────────────────────────
+### 📁 create_or_clear_servers_json_file
+# Creates or overwrites servers.json file with empty JSON array.
 create_or_clear_servers_json_file(){
   local JSON_FILE="$ROOT_DIR/servers.json"
 
@@ -242,7 +258,8 @@ create_or_clear_servers_json_file(){
   echo "[]" > "$JSON_FILE"
 }
 
-### 🧠 Load Static Server Data
+### 📄 get_all_servers_from_file
+# Loads server details from servers.json into SERVER_IDS, SERVER_IPS, SERVER_NAMES arrays.
 get_all_servers_from_file() {
   local JSON_FILE="$ROOT_DIR/servers.json"
 
@@ -261,6 +278,9 @@ get_all_servers_from_file() {
   echo "📦 Loaded ${#SERVER_IDS[@]} servers from file"
 }
 
+### ▶️ run_script
+# Executes a script located in Scripts/<SCRIPT_NAME>/script.sh with arguments.
+# Exits with error if script does not exist.
 run_script() {
   local SCRIPT_NAME="$1"
   shift
@@ -278,11 +298,9 @@ run_script() {
   "$SCRIPT_PATH" "$@"
 }
 
-# ────────────────────────────────────────────────────────────────
-# Generates the beginning of an HTML report for server usage.
-# This sets the global variable REPORT_FILE to a new temp file.
-# Output includes basic table headers for disk, RAM, and CPU usage.
-# ────────────────────────────────────────────────────────────────
+### 📊 setup_html_report
+# Initializes an HTML report file with table headers for server usage summary.
+# Sets REPORT_FILE global variable.
 setup_html_report() {
   REPORT_FILE="/tmp/server_heals_report.html"
   cat <<EOF > "$REPORT_FILE"
@@ -309,10 +327,8 @@ setup_html_report() {
 EOF
 }
 
-# ────────────────────────────────────────────────────────────────
-# Appends closing HTML tags to REPORT_FILE and sends it via email
-# using msmtp. Assumes $NOTIFY_EMAIL and $REPORT_FILE are set.
-# ────────────────────────────────────────────────────────────────
+### 📧 send_html_report
+# Appends closing tags to REPORT_FILE and emails the report to $NOTIFY_EMAIL using msmtp.
 send_html_report() {
   {
     echo "</table>"
@@ -342,11 +358,9 @@ send_html_report() {
   echo "📧 HTML report sent to $NOTIFY_EMAIL"
 }
 
-# ────────────────────────────────────────────────────────────────
-# Iterates over SERVER_LIST and runs the designated script
-# (stored in SCRIPT_FOLDER) on each server IP.
-# If a server fails, it's added to the FAILED array.
-# ────────────────────────────────────────────────────────────────
+### 🚀 run_for_all_servers
+# Iterates through all loaded servers and runs the designated script on each server.
+# Appends failures to ERROR_SUMMARY.
 run_for_all_servers() {
   echo "📋 Running for ${#SERVER_IPS[@]} servers..."
 
@@ -369,10 +383,8 @@ run_for_all_servers() {
   done
 }
 
-# ────────────────────────────────────────────────────────────────
-# Prints a summary at the end of the run.
-# Shows whether all servers succeeded or lists failed ones.
-# ────────────────────────────────────────────────────────────────
+### 📋 print_summary
+# Prints a summary of the script run, showing success or failed servers.
 print_summary() {
   echo -e "\n📋 Summary:"
   if [[ "${#FAILED[@]}" -eq 0 ]]; then
