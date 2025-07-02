@@ -114,6 +114,7 @@ fetch_all_runcloud_servers() {
   echo "📥 Wrote ${#temp_entries[@]} simplified server entries to $output_file"
 }
 
+### //todo switch fetch_all_runcloud_servers with fetch_all_runcloud_servers2
 fetch_all_runcloud_servers2() {
 
   declare -a temp_entries=()
@@ -149,8 +150,91 @@ fetch_all_runcloud_servers2() {
 
   jq -n --argjson arr "$(printf '%s\n' "${temp_entries[@]}" | jq -s '.')" '$arr'
 }
+fetch_all_vultr_servers2() {
+  echo "🔄 Fetching servers from Vultr (paginated)..." >&2
+
+  local page=1
+  local -a entries=()
+
+  while true; do
+    response=$(curl -sS -H "Authorization: Bearer $VULTR_API_TOKEN" \
+      "https://api.vultr.com/v2/instances?page=$page&per_page=500")
+
+    # Check for API errors
+    if ! echo "$response" | jq -e '.instances | type == "array"' >/dev/null 2>&1; then
+      echo "❌ Vultr API error on page $page" >&2
+      echo "$response" >&2
+      return 1
+    fi
+
+    local count
+    count=$(echo "$response" | jq '.instances | length')
+    echo "📦 Page $page: $count instances" >&2
+
+    # Extract relevant fields into an array
+    mapfile -t page_entries < <(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, main_ip: .main_ip}')
+
+    entries+=("${page_entries[@]}")
+
+    # Check if more pages exist
+    next=$(echo "$response" | jq -r '.meta.links.next // empty')
+    [[ -z "$next" || "$next" == "null" ]] && break
+    ((page++))
+    sleep 0.05
+  done
+
+  if [[ ${#entries[@]} -eq 0 ]]; then
+    echo "❌ No servers found from Vultr API." >&2
+    return 1
+  fi
+
+  # Emit JSON array
+  jq -n --argjson arr "$(printf '%s\n' "${entries[@]}" | jq -s '.')" '$arr'
+}
 
 
+fetch_all_vultr_servers() {
+  echo "🔄 Fetching servers from Vultr (paginated)..." >&2
+
+  local page=1
+  local first=true
+  JSON_FILE="/tmp/vultr_servers.json"
+  echo "[" > "$JSON_FILE"
+
+  while true; do
+    response=$(curl -sS -H "Authorization: Bearer $VULTR_API_TOKEN" \
+      "https://api.vultr.com/v2/instances?page=$page&per_page=500")
+
+    if echo "$response" | jq -e '.instances | type == "array"' >/dev/null; then
+      count=$(echo "$response" | jq '.instances | length')
+      echo "📦 Page $page: $count instances"
+
+      entries=$(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, ipAddress: .main_ip}')
+      while read -r entry; do
+        if [[ "$first" == true ]]; then
+          echo "$entry" >> "$JSON_FILE"
+          first=false
+        else
+          echo ",$entry" >> "$JSON_FILE"
+        fi
+      done <<< "$entries"
+    else
+      echo "❌ API error on page $page" >&2
+      echo "$response" >&2
+      echo "]" >> "$JSON_FILE"
+      exit 1
+    fi
+
+    next=$(echo "$response" | jq -r '.meta.links.next // empty')
+    [[ -z "$next" || "$next" == "null" ]] && break
+    ((page++))
+    sleep 0.05
+  done
+
+  echo "]" >> "$JSON_FILE"
+
+  echo "✅ Vultr server list saved to $JSON_FILE"
+}
 
 fetch_all_runcloud_apps() {
    echo "🌐 Fetching all servers from RunCloud..."
