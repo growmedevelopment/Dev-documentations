@@ -122,8 +122,7 @@ save_runcloud_servers_to_file() {
 }
 
 
-
-fetch_all_vultr_servers2() {
+fetch_all_vultr_servers() {
   echo "🔄 Fetching servers from Vultr (paginated)..." >&2
 
   local page=1
@@ -163,50 +162,6 @@ fetch_all_vultr_servers2() {
 
   # Emit JSON array
   jq -n --argjson arr "$(printf '%s\n' "${entries[@]}" | jq -s '.')" '$arr'
-}
-
-
-fetch_all_vultr_servers() {
-  echo "🔄 Fetching servers from Vultr (paginated)..." >&2
-
-  local page=1
-  local first=true
-  JSON_FILE="/tmp/vultr_servers.json"
-  echo "[" > "$JSON_FILE"
-
-  while true; do
-    response=$(curl -sS -H "Authorization: Bearer $VULTR_API_TOKEN" \
-      "https://api.vultr.com/v2/instances?page=$page&per_page=500")
-
-    if echo "$response" | jq -e '.instances | type == "array"' >/dev/null; then
-      count=$(echo "$response" | jq '.instances | length')
-      echo "📦 Page $page: $count instances"
-
-      entries=$(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, ipAddress: .main_ip}')
-      while read -r entry; do
-        if [[ "$first" == true ]]; then
-          echo "$entry" >> "$JSON_FILE"
-          first=false
-        else
-          echo ",$entry" >> "$JSON_FILE"
-        fi
-      done <<< "$entries"
-    else
-      echo "❌ API error on page $page" >&2
-      echo "$response" >&2
-      echo "]" >> "$JSON_FILE"
-      exit 1
-    fi
-
-    next=$(echo "$response" | jq -r '.meta.links.next // empty')
-    [[ -z "$next" || "$next" == "null" ]] && break
-    ((page++))
-    sleep 0.05
-  done
-
-  echo "]" >> "$JSON_FILE"
-
-  echo "✅ Vultr server list saved to $JSON_FILE"
 }
 
 fetch_all_runcloud_apps() {

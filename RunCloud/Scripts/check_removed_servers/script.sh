@@ -57,7 +57,7 @@ generate_report() {
 # 🏁 Main workflow
 echo "🚦 Starting removed servers check..."
 
-vultr_data=$(fetch_all_vultr_servers2)
+vultr_data=$(fetch_all_vultr_servers)
 runcloud_data=$(fetch_all_runcloud_servers)
 
 
