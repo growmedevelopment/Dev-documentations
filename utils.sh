@@ -62,7 +62,7 @@ fetch_all_vultr_servers() {
     echo "📦 Page $page: $count instances" >&2
 
     # Extract relevant fields into an array
-    mapfile -t page_entries < <(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, main_ip: .main_ip}')
+    mapfile -t page_entries < <(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, ipAddress: .main_ip}')
 
     entries+=("${page_entries[@]}")
 
@@ -123,7 +123,7 @@ fetch_all_runcloud_servers() {
 
 ### 💾 save_servers_to_file
 # Saves provided JSON data to $ROOT_DIR/servers.json.
-fetch_all_vultr_servers() {
+save_servers_to_file() {
   local json_data="$1"
   local output_file="$ROOT_DIR/servers.json"
 

@@ -25,7 +25,7 @@ get_removed_servers() {
   fi
 
   # Extract IPs from each set
-  vultr_ips=$(echo "$vultr_json" | jq -r '.[] | .main_ip' | sort)
+  vultr_ips=$(echo "$vultr_json" | jq -r '.[] | .ipAddress' | sort)
   runcloud_ips=$(echo "$runcloud_json" | jq -r '.[] | .ipAddress' | sort)
 
   # IPs in Vultr but not in RunCloud (servers removed from RunCloud)
