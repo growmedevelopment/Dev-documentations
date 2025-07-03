@@ -4,82 +4,82 @@ set -euo pipefail
 REMOTE_IP="155.138.130.98"
 REMOTE_USER="root"
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Load environment variables (must include VULTR_API_TOKEN, NOTIFY_EMAIL)
 source "$ROOT_DIR/../../utils.sh"
 load_env
 
-IP_LIST_FILE="/tmp/server_ips.txt"
-JSON_FILE="/tmp/fresh_servers.json"
-page=1
-first=true
-
-# Start JSON array
-echo "[" > "$JSON_FILE"
-
-while true; do
-  response=$(curl -s -H "Authorization: Bearer $VULTR_API_TOKEN" \
-    "https://api.vultr.com/v2/instances?page=$page&per_page=500")
-
-  if echo "$response" | jq -e '.instances | type == "array"' >/dev/null; then
-    count=$(echo "$response" | jq '.instances | length')
-    echo "📦 Page $page: $count instances"
-
-    entries=$(echo "$response" | jq -c '.instances[] | {id: .id, name: .label, ipAddress: .main_ip}')
-    while read -r entry; do
-      if [[ "$first" == true ]]; then
-        echo "$entry" >> "$JSON_FILE"
-        first=false
-      else
-        echo ",$entry" >> "$JSON_FILE"
-      fi
-    done <<< "$entries"
-  else
-    echo "❌ API error on page $page"
-    echo "$response"
-    echo "]" >> "$JSON_FILE"
-    exit 1
-  fi
-
-  next=$(echo "$response" | jq -r '.meta.links.next // empty')
-  [[ -z "$next" || "$next" == "null" ]] && break
-  ((page++))
-  sleep 0.05
-done
-
-# Close JSON array
-echo "]" >> "$JSON_FILE"
-
-# Generate IP list from that JSON
-jq -r '.[].ipAddress' "$JSON_FILE" > "$IP_LIST_FILE"
-
-if [[ ! -s "$IP_LIST_FILE" ]]; then
-  echo "❌ No IP addresses found. Aborting."
+# Validate required variables
+if [[ -z "${VULTR_API_TOKEN:-}" ]]; then
+  echo "❌ VULTR_API_TOKEN is not set. Exiting."
+  exit 1
+fi
+if [[ -z "${NOTIFY_EMAIL:-}" ]]; then
+  echo "❌ NOTIFY_EMAIL is not set. Exiting."
   exit 1
 fi
 
-# 2. Upload IP list to server
-scp "$IP_LIST_FILE" "$REMOTE_USER@$REMOTE_IP:/root/server_ips.txt"
-
 NOTIFY_EMAIL_ESCAPED="${NOTIFY_EMAIL//\"/\\\"}"
 
-# 3. Create ping_report.sh on the remote server
+echo "✅ Loaded environment. Deploying..."
+
+# 1. Upload the Vultr API token securely to the remote server
+ssh "$REMOTE_USER@$REMOTE_IP" "echo '$VULTR_API_TOKEN' > /root/.vultr_token && chmod 600 /root/.vultr_token"
+
+# 2. Deploy the self-contained ping_report.sh script to the remote server
 ssh "$REMOTE_USER@$REMOTE_IP" "cat > /root/ping_report.sh" <<EOF
 #!/bin/bash
 set -euo pipefail
 
-trap 'ERR_LINE=\$LINENO; echo "❌ ping_report.sh FAILED on \$(hostname) at \$(date)\nLine: \$ERR_LINE" | mail -s "Ping Report FAILED" "$NOTIFY_EMAIL_ESCAPED"' ERR
+trap 'ERR_LINE=\$LINENO; echo -e "❌ ping_report.sh FAILED on \$(hostname) at \$(date)\nLine: \$ERR_LINE" | mail -s "Ping Report FAILED" "$NOTIFY_EMAIL_ESCAPED"' ERR
 
+VULTR_API_TOKEN=\$(< /root/.vultr_token)
 IP_LIST_FILE="/root/server_ips.txt"
 HTML_REPORT="/tmp/server_ping_report.html"
 LOG_FILE="/var/log/ping_debug.log"
 NOTIFY_EMAIL="$NOTIFY_EMAIL_ESCAPED"
 
-# Ensure sendmail is installed
-if ! command -v sendmail &>/dev/null; then
-  echo "📦 Installing sendmail..."
-  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y sendmail
+for cmd in curl jq ping sendmail; do
+  if ! command -v "\$cmd" &>/dev/null; then
+    echo "❌ Required command '\$cmd' not found. Installing..."
+    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y "\$cmd"
+  fi
+done
+
+page=1
+echo "[]" > /tmp/instances.json
+
+while true; do
+  echo "📡 Fetching page \$page..."
+  response=\$(curl -s -H "Authorization: Bearer \$VULTR_API_TOKEN" \
+    "https://api.vultr.com/v2/instances?page=\$page&per_page=500")
+
+  if echo "\$response" | jq -e '.instances | type == "array"' >/dev/null; then
+    count=\$(echo "\$response" | jq '.instances | length')
+    echo "📦 Page \$page: \$count instances"
+
+    instances=\$(echo "\$response" | jq '.instances')
+    jq -s '.[0] + .[1]' /tmp/instances.json <(echo "\$instances") > /tmp/instances_new.json
+    mv /tmp/instances_new.json /tmp/instances.json
+  else
+    echo "❌ API error on page \$page"
+    echo "\$response"
+    exit 1
+  fi
+
+  next=\$(echo "\$response" | jq -r '.meta.links.next // empty')
+  [[ -z "\$next" || "\$next" == "null" ]] && break
+  ((page++))
+  sleep 0.05
+done
+
+jq -r '.[] | .main_ip' /tmp/instances.json > "\$IP_LIST_FILE"
+
+if [[ ! -s "\$IP_LIST_FILE" ]]; then
+  echo "❌ No IPs found in Vultr API response."
+  exit 1
 fi
 
-# Start fresh log
 echo "=== Ping Report Log - \$(date) ===" > "\$LOG_FILE"
 
 cat > "\$HTML_REPORT" <<EOT
@@ -136,13 +136,10 @@ EOT
 sendmail -t < "\$HTML_REPORT"
 EOF
 
-# 4. Set permissions
+# 3. Set permissions
 ssh "$REMOTE_USER@$REMOTE_IP" "chmod +x /root/ping_report.sh"
 
-# 5. Schedule cron job
+# 4. Schedule cron job
 ssh "$REMOTE_USER@$REMOTE_IP" 'echo "0 0 * * * root /root/ping_report.sh" > /etc/cron.d/ping_report && chmod 644 /etc/cron.d/ping_report'
-
-# 6. Clean up temporary files
-rm -f "$JSON_FILE" "$IP_LIST_FILE"
 
 echo "✅ ping_report.sh deployed and scheduled via cron on $REMOTE_IP"

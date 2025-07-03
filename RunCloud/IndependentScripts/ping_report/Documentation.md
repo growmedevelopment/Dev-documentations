@@ -1,39 +1,61 @@
-
-# 📡 Server Uptime Monitoring Script
+# 📡 Server Uptime Monitoring Script (Refactored)
 
 ## Overview
 
-This script automates deployment of a cron-based monitoring system to a remote server. It pings a list of servers daily and emails an HTML report indicating their availability and response time.
+This system automates deployment of a cron-based monitoring script to a remote server. Every day, the server fetches the **latest list of Vultr instances**, pings each one, and sends an HTML email report showing their availability and response times.
 
 ---
 
 ## 📁 Components
 
-- `servers.json`: JSON file containing an array of servers with `name` and `ipAddress` keys.
-- `ping_report.sh`: The script deployed to the remote server for ping checks and email reporting.
-- `utils.sh`: Loads environment variables (like `NOTIFY_EMAIL`).
+- **ping_report.sh**  
+  The script deployed to the remote server. It:
+    - Fetches fresh servers from Vultr API.
+    - Generates the ping report.
+    - Emails results.
+
+- **utils.sh**  
+  Loads environment variables locally (e.g., `VULTR_API_TOKEN`, `NOTIFY_EMAIL`) for the deployment script.
+
+- **deploy_ping_report.sh**  
+  The local script you run to:
+    - Upload your Vultr API token to the remote server.
+    - Deploy `ping_report.sh`.
+    - Schedule it in cron.
 
 ---
 
 ## 🔧 What It Does
 
 1. **Loads Configuration**  
-   Loads the environment and server list from `servers.json`.
+   Your local `deploy_ping_report.sh` loads `VULTR_API_TOKEN` and `NOTIFY_EMAIL` from your environment.
 
-2. **Generates IP List**  
-   Extracts all IP addresses from the JSON and writes them to `/tmp/server_ips.txt`.
+2. **Uploads API Token**  
+   Pushes your `VULTR_API_TOKEN` securely to the remote server’s `/root/.vultr_token`.
 
-3. **Uploads to Remote Server**  
-   Copies the IP list to `/root/server_ips.txt` on the target server.
+3. **Deploys Remote Script**  
+   Uploads `ping_report.sh` to `/root/ping_report.sh` on the remote server.
 
-4. **Creates Remote Script**  
-   Deploys `ping_report.sh` to `/root` on the remote server:
+4. **Remote Script Behavior**  
+   Every time `/root/ping_report.sh` runs (manually or via cron):
+    - Fetches the current list of servers from Vultr API.
+    - Generates an up-to-date list of IPs.
     - Pings each IP.
-    - Creates an HTML status report.
-    - Emails it to `NOTIFY_EMAIL`.
+    - Creates an HTML report with:
+        - IP address
+        - Status (`UP` / `DOWN`)
+        - Ping time in milliseconds.
+    - Emails the report to `NOTIFY_EMAIL`.
 
 5. **Schedules Cron Job**  
-   Sets up a daily cron job at 12:00 AM to run the report automatically.
+   Configures `/etc/cron.d/ping_report` on the remote server to run the report **daily at 12:00 AM**.
+
+---
+
+## ⚠️ Important: API Whitelisting
+
+Don’t forget to **add your remote server’s IP address** to the Vultr API IP whitelist in the [Vultr customer portal](https://my.vultr.com/settings/#apiaccess).  
+If you skip this, the API requests from your server will fail with 403 Forbidden errors.
 
 ---
 
@@ -41,6 +63,19 @@ This script automates deployment of a cron-based monitoring system to a remote s
 
 - **Email Report**  
   Sent daily with:
-    - Server IP
-    - Status (`UP` / `DOWN`)
-    - Ping time in milliseconds
+    - Server IP addresses.
+    - Status (`UP`/`DOWN`).
+    - Ping times.
+
+- **Log File**  
+  Remote server logs each run to `/var/log/ping_debug.log` for troubleshooting.
+
+---
+
+## ✅ Key Advantages
+
+- No need to manually maintain or upload `servers.json` or IP lists.
+- The remote server always uses the **latest servers in your Vultr account**.
+- Local script only needs to run when you update deployment settings (e.g., change `NOTIFY_EMAIL` or redeploy).
+
+---
