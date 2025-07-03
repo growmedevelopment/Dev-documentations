@@ -121,34 +121,26 @@ Uses the RunCloud API to inject your SSH public key into a specified server, ena
 
 ## 🛠 Running Scripts
 
-[//]: # ()
-[//]: # (The preferred method is to use the universal runner:)
+You can easily run any script from `Script` folder across all your servers using the universal runner. From your project root, just call:
 
-[//]: # (```bash)
+```bash
+./deploy_to_servers.sh <script_folder>
+```
+Replace `<script_folder>` with the folder name of the script you want to run. For example:
 
-[//]: # (SCRIPT_FOLDER=<script-folder>)
 
-[//]: # (./deploy_to_servers.sh)
+```bash
+./deploy_to_servers.sh ssh_injection
+./deploy_to_servers.sh check_ram_cpu_disk_usage
+./deploy_to_servers.sh ssh_checks
+./deploy_to_servers.sh set_making_backup
+./deploy_to_servers.sh remove_old_backups
+./deploy_to_servers.sh remove_cron_user
+```
 
-[//]: # ()
-[//]: # (## 📦 Main Scripts)
+✅ Need help?
 
-[//]: # ()
-[//]: # (1. `ssh_injection` – Injects SSH key for root access)
-
-[//]: # (2. `check_ram_cpu_disk_usage` – Checks server health &#40;RAM, CPU, disk&#41;)
-
-[//]: # (3. `extend_space_with_unallocated` – Expands unallocated disk space)
-
-[//]: # (4. `set_making_backup` – Sets up automated daily backups and restore config)
-
-[//]: # ()
-[//]: # (---)
-
-[//]: # ()
-[//]: # (## 🛠️ Helper Scripts)
-
-[//]: # ()
-[//]: # (- `make_backup` – Manually runs `full_vultr_backup.sh` for daily backup)
-
-[//]: # (- `ssh_script` – Verifies SSH access and provides SSH key instructions)
+Run:
+```bash
+./deploy_to_servers.sh --help
+```
