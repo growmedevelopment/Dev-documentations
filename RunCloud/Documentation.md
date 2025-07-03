@@ -1,44 +1,154 @@
-# 🌐 Global Script Usage Guide
+# 📚 RunCloud Server Automation & Maintenance Documentation
 
-Before running any script, ensure you have **root access** to the server.
+## 📝 Overview
 
----
-
-## 🔐 Gaining Access
-
-1. **Generate SSH Key:**  
-   → See `Create SSH Key.md` in the `ssh_injection/` folder.
-
-2. **Inject SSH Key:**  
-   → Run the injection script in the same folder to enable root access.
+This suite of Bash scripts automates monitoring, backup, and maintenance for servers managed via RunCloud + Vultr. Scripts handle uptime checks, orphaned server detection, backups, disk extensions, and cron cleanups.
 
 ---
 
-## 🚀 Running Scripts
+## 🚀 Quick Start
 
-Use the **Universal Runner**:
-```bash
-deploy_to_servers.sh
-```
+1. **Environment Setup**
+- Create a `.env` file with credentials:
+  ```env
+  NOTIFY_EMAIL=...
+  SUMMARY_FILE=$(mktemp)
+  SMTP_RELAY_USER=...
+  SMTP_RELAY_PASS=...
+  SSH_KEY_NAME=...
+  SSH_PUBLIC_KEY=...
+  DRY_RUN="true"
+  VULTR_API_TOKEN=...
+  RUNCLOUD_API_TOKEN=...
+  AWS_ACCESS_KEY_ID=...
+  AWS_SECRET_ACCESS_KEY=...
+  ```
+- Install prerequisites:
+  ```bash
+  sudo apt install jq curl bash msmtp awscli
+  ```
+  Also install `timeout` (Linux) or `gtimeout` (macOS with coreutils).
 
-Just set:
-```bash
-SCRIPT_FOLDER=<your-target-folder>
-```
-…to run any script from that directory on all listed servers.
+2. **SSH Key**
+- Create and use an SSH key **without a passphrase**, for automated root access.
+
+3. **SSH Access**
+- Use `ssh_injection` scripts to inject your public key onto all servers for passwordless root login.
+
+4. **Edit `servers.json`**
+- This file is the main data source listing your servers.
+- Each object must include `id`, `name`, and `ipAddress`. **Do not leave fields empty**.
+
+5. **Configure Local msmtp**
+   all info you can get from your Gmail account. You have to create Gmail APP and get password
+- Update your `~/.msmtprc` to send emails with your SMTP relay credentials:
+  ```
+  defaults
+  auth           on
+  tls            on
+  tls_trust_file /etc/ssl/certs/ca-certificates.crt
+  logfile        ~/.msmtp.log
+
+  account        default
+  host           smtp.yourrelay.com
+  port           587
+  user           $SMTP_RELAY_USER
+  password       $SMTP_RELAY_PASS
+  from           $NOTIFY_EMAIL
+  ```
+- Test with:
+  ```bash
+  echo "Test email body" | msmtp recipient@example.com
+  ```
+
+6. **Deploy Scripts**
+- Use the universal runner:  deploy_to_servers.sh
+- Or run individual scripts as documented below.
 
 ---
 
-## 📦 Main Scripts
+## 📦 Script Summaries
 
-1. `ssh_injection` – Injects SSH key for root access
-2. `check_ram_cpu_disk_usage` – Checks server health (RAM, CPU, disk)
-3. `extend_space_with_unallocated` – Expands unallocated disk space
-4. `set_making_backup` – Sets up automated daily backups and restore config
+### ✅ Server Uptime Monitoring
+**Script:** `ping_report.sh`
+Automates daily pings of all Vultr servers fetched via API, generating and emailing an HTML uptime report. Includes deployment helper scripts to upload credentials, install the monitor on a remote server, and configure a daily cron job. Outputs logs to `/var/log/ping_debug.log`.
+---
+
+### ✅ Removed Servers Checker
+**Script:** `check_removed_servers`
+Scans Vultr Object Storage for backup folders of apps no longer existing in RunCloud, deletes outdated or orphaned backups while keeping the latest in daily/ and weekly/ folders, and generates an HTML report emailed to `NOTIFY_EMAIL`. Supports dry-run mode for safe testing before deletion.
+
 
 ---
 
-## 🛠️ Helper Scripts
+### ✅ Server Metrics Collector
+**Script:** `check_ram_cpu_disk_usage`
+Connects to each server via SSH and collects key metrics: disk usage, unallocated space, memory, and CPU utilization. Generates color-coded HTML table rows (🟥/🟧/🟩) for easy health visualization, appends them to a report file, and sends the HTML report via email to `NOTIFY_EMAIL`.
 
-- `make_backup` – Manually runs `full_vultr_backup.sh` for daily backup
-- `ssh_script` – Verifies SSH access and provides SSH key instructions
+---
+
+### ✅ Remote Disk Extender
+**Script:** `extend_space_with_unallocated`
+Connects to a server via SSH, detects unallocated disk space on the root disk, and automatically extends the root partition if space is available. Handles both ext-based and XFS filesystems, resizes the filesystem, and logs each step for easy auditing.
+
+---
+
+### ✅ Backup Deployer 
+**Script:** **`make_backup.sh`  
+Automates running daily backups across all RunCloud servers. Checks for key-based access (skipping servers requiring a password), runs the backup with a configurable timeout, supports a dry-run mode, and sends email alerts to `NOTIFY_EMAIL` on failures.
+---
+
+
+### ✅ Remove Root Cron Jobs
+**Script:** `remove_cron_user`
+Connects to each server via SSH and safely deletes the root user’s personal crontab (crontab -e), without touching system-wide cron files like `/etc/crontab` or `/etc/cron.d/*`
+---
+
+### ✅ Automated Backup Script & Restore Guide
+**Script:** `set_making_backup`
+Remotely configures servers for automated daily, weekly, monthly, and yearly WordPress backups to Vultr Object Storage. Installs required tools, sets up rclone and SMTP relay, deploys /root/full_vultr_backup.sh, configures cron schedules, and installs an interactive restore tool (restore-backup) for easy website and database recovery.
+---
+
+### ✅ SSH Accessibility Checker
+**Script:** `ssh_checks`
+Verifies SSH key-based root access to a specified server, timing out after 5 seconds. Returns success or failure status without making any changes on the server. Integrates seamlessly with deploy_to_servers.sh for automated multi-server checks.
+---
+
+### ✅ SSH Key Injector
+**Script:** `ssh_injection`
+Uses the RunCloud API to inject your SSH public key into a specified server, enabling passwordless root access. Takes server IP, ID, and name as arguments; verifies success from the API response; and provides helpful error messages if the server ID is invalid or the key label already exists.
+---
+
+## 🛠 Running Scripts
+
+[//]: # ()
+[//]: # (The preferred method is to use the universal runner:)
+
+[//]: # (```bash)
+
+[//]: # (SCRIPT_FOLDER=<script-folder>)
+
+[//]: # (./deploy_to_servers.sh)
+
+[//]: # ()
+[//]: # (## 📦 Main Scripts)
+
+[//]: # ()
+[//]: # (1. `ssh_injection` – Injects SSH key for root access)
+
+[//]: # (2. `check_ram_cpu_disk_usage` – Checks server health &#40;RAM, CPU, disk&#41;)
+
+[//]: # (3. `extend_space_with_unallocated` – Expands unallocated disk space)
+
+[//]: # (4. `set_making_backup` – Sets up automated daily backups and restore config)
+
+[//]: # ()
+[//]: # (---)
+
+[//]: # ()
+[//]: # (## 🛠️ Helper Scripts)
+
+[//]: # ()
+[//]: # (- `make_backup` – Manually runs `full_vultr_backup.sh` for daily backup)
+
+[//]: # (- `ssh_script` – Verifies SSH access and provides SSH key instructions)

@@ -8,9 +8,33 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/utils.sh"
 
-SCRIPT_FOLDER="set_making_backup"
-#SCRIPT_FOLDER="${1:-ssh_injection}"
-#./main.sh check_ram_cpu_disk_usage
+# ────────────────────────────────────────────────────────────────
+# CLI Argument Parser
+# ────────────────────────────────────────────────────────────────
+
+if [[ $# -lt 1 ]]; then
+  echo "❗ Usage: $0 <script_folder>"
+  echo "   Example: $0 set_making_backup"
+  echo "   Run '$0 --help' for more information."
+  exit 1
+fi
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  echo "📖 Usage: $0 <script_folder>"
+  echo ""
+  echo "Run any script folder across all servers defined in servers.json."
+  echo ""
+  echo "Examples:"
+  echo "  $0 set_making_backup"
+  echo "  $0 check_ram_cpu_disk_usage"
+  echo "  $0 ssh_injection"
+  echo "  $0 ssh_checks"
+  echo "  $0 remove_old_backups"
+  echo "  $0 remove_cron_user"
+  exit 0
+fi
+
+SCRIPT_FOLDER="$1"
 
 SERVER_JSON="$ROOT_DIR/servers.json"
 FAILED=()
@@ -54,7 +78,6 @@ else
     save_servers_to_file "$vultr_data"
   fi
 fi
-
 
 get_all_servers_from_file
 
