@@ -191,7 +191,7 @@ main() {
   mkdir -p "$BACKUP_DIR"
 
   case "$MODE" in
-    daily)   RETENTION_DAYS=7 ;;
+    daily)   RETENTION_DAYS=5 ;;
     weekly)  RETENTION_DAYS=30 ;;
     monthly) RETENTION_DAYS=365 ;;
     yearly)  RETENTION_DAYS=1825 ;;
@@ -236,21 +236,24 @@ main() {
     esac
 
     TAR_PATH="$BACKUP_DIR/$OUT"
-    tar -czf "$TAR_PATH" -C "$TMP" . || {
-      error_notify "Failed to create archive $OUT"
+    if tar -czf "$TAR_PATH" -C "$TMP" . >> /tmp/backup_debug.log 2>&1; then
+      log_debug "✅ Archive created successfully: $OUT"
+    else
+      log_debug "❌ tar failed for $APP (see /tmp/backup_debug.log for details)"
+      error_notify "❌ Failed to create archive $OUT for $APP on server $SERVER_IP"
       continue
-    }
+    fi
 
    # --- Upload to Vultr using rclone ---
    if [ -f "$TAR_PATH" ]; then
      echo "📤 Uploading $TAR_PATH to Vultr with rclone..."
      log_debug "📤 Uploading $TAR_PATH to Vultr..."
-     if timeout 1h rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P; then
+     if timeout 1h rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P >> /tmp/backup_debug.log 2>&1; then
        log_debug "✅ Upload successful for $APP"
        echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Backup and upload successful for $APP" >> /root/backup_success.log
        rm -rf "$TMP" "$TAR_PATH"
      else
-       log_debug "❌ Upload failed or timed out for $APP"
+       log_debug "❌ Upload failed or timed out for $APP (see /tmp/backup_debug.log for details)"
        error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Upload failed for $APP using rclone on server $SERVER_IP"
      fi
    else
