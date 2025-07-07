@@ -6,6 +6,60 @@ This suite of Bash scripts automates monitoring, backup, and maintenance for ser
 
 ---
 
+
+## 📦 Script Summaries
+
+### ✅ Server Uptime Monitoring
+**Script:** `ping_report.sh`
+Automates daily pings of all Vultr servers fetched via API, generating and emailing an HTML uptime report. Includes deployment helper scripts to upload credentials, install the monitor on a remote server, and configure a daily cron job. Outputs logs to `/var/log/ping_debug.log`.
+---
+
+### ✅ Removed Servers Checker
+**Script:** `check_removed_servers`
+Scans Vultr Object Storage for backup folders of apps no longer existing in RunCloud, deletes outdated or orphaned backups while keeping the latest in daily/ and weekly/ folders, and generates an HTML report emailed to `NOTIFY_EMAIL`. Supports dry-run mode for safe testing before deletion.
+
+
+---
+
+### ✅ Server Metrics Collector
+**Script:** `check_ram_cpu_disk_usage`
+Connects to each server via SSH and collects key metrics: disk usage, unallocated space, memory, and CPU utilization. Generates color-coded HTML table rows (🟥/🟧/🟩) for easy health visualization, appends them to a report file, and sends the HTML report via email to `NOTIFY_EMAIL`.
+
+---
+
+### ✅ Remote Disk Extender
+**Script:** `extend_space_with_unallocated`
+Connects to a server via SSH, detects unallocated disk space on the root disk, and automatically extends the root partition if space is available. Handles both ext-based and XFS filesystems, resizes the filesystem, and logs each step for easy auditing.
+
+---
+
+### ✅ Backup Deployer
+**Script:** **`make_backup.sh`  
+Automates running daily backups across all RunCloud servers. Checks for key-based access (skipping servers requiring a password), runs the backup with a configurable timeout, supports a dry-run mode, and sends email alerts to `NOTIFY_EMAIL` on failures.
+---
+
+
+### ✅ Remove Root Cron Jobs
+**Script:** `remove_cron_user`
+Connects to each server via SSH and safely deletes the root user’s personal crontab (crontab -e), without touching system-wide cron files like `/etc/crontab` or `/etc/cron.d/*`
+---
+
+### ✅ Automated Backup Script & Restore Guide
+**Script:** `set_making_backup`
+Remotely configures servers for automated daily, weekly, monthly, and yearly WordPress backups to Vultr Object Storage. Installs required tools, sets up rclone and SMTP relay, deploys /root/full_vultr_backup.sh, configures cron schedules, and installs an interactive restore tool (restore-backup) for easy website and database recovery.
+---
+
+### ✅ SSH Accessibility Checker
+**Script:** `ssh_checks`
+Verifies SSH key-based root access to a specified server, timing out after 5 seconds. Returns success or failure status without making any changes on the server. Integrates seamlessly with deploy_to_servers.sh for automated multi-server checks.
+---
+
+### ✅ SSH Key Injector
+**Script:** `ssh_injection`
+Uses the RunCloud API to inject your SSH public key into a specified server, enabling passwordless root access. Takes server IP, ID, and name as arguments; verifies success from the API response; and provides helpful error messages if the server ID is invalid or the key label already exists.
+---
+
+
 ## 🚀 Quick Start
 
 1. **Environment Setup**
@@ -65,58 +119,6 @@ This suite of Bash scripts automates monitoring, backup, and maintenance for ser
 - Use the universal runner:  deploy_to_servers.sh
 - Or run individual scripts as documented below.
 
----
-
-## 📦 Script Summaries
-
-### ✅ Server Uptime Monitoring
-**Script:** `ping_report.sh`
-Automates daily pings of all Vultr servers fetched via API, generating and emailing an HTML uptime report. Includes deployment helper scripts to upload credentials, install the monitor on a remote server, and configure a daily cron job. Outputs logs to `/var/log/ping_debug.log`.
----
-
-### ✅ Removed Servers Checker
-**Script:** `check_removed_servers`
-Scans Vultr Object Storage for backup folders of apps no longer existing in RunCloud, deletes outdated or orphaned backups while keeping the latest in daily/ and weekly/ folders, and generates an HTML report emailed to `NOTIFY_EMAIL`. Supports dry-run mode for safe testing before deletion.
-
-
----
-
-### ✅ Server Metrics Collector
-**Script:** `check_ram_cpu_disk_usage`
-Connects to each server via SSH and collects key metrics: disk usage, unallocated space, memory, and CPU utilization. Generates color-coded HTML table rows (🟥/🟧/🟩) for easy health visualization, appends them to a report file, and sends the HTML report via email to `NOTIFY_EMAIL`.
-
----
-
-### ✅ Remote Disk Extender
-**Script:** `extend_space_with_unallocated`
-Connects to a server via SSH, detects unallocated disk space on the root disk, and automatically extends the root partition if space is available. Handles both ext-based and XFS filesystems, resizes the filesystem, and logs each step for easy auditing.
-
----
-
-### ✅ Backup Deployer 
-**Script:** **`make_backup.sh`  
-Automates running daily backups across all RunCloud servers. Checks for key-based access (skipping servers requiring a password), runs the backup with a configurable timeout, supports a dry-run mode, and sends email alerts to `NOTIFY_EMAIL` on failures.
----
-
-
-### ✅ Remove Root Cron Jobs
-**Script:** `remove_cron_user`
-Connects to each server via SSH and safely deletes the root user’s personal crontab (crontab -e), without touching system-wide cron files like `/etc/crontab` or `/etc/cron.d/*`
----
-
-### ✅ Automated Backup Script & Restore Guide
-**Script:** `set_making_backup`
-Remotely configures servers for automated daily, weekly, monthly, and yearly WordPress backups to Vultr Object Storage. Installs required tools, sets up rclone and SMTP relay, deploys /root/full_vultr_backup.sh, configures cron schedules, and installs an interactive restore tool (restore-backup) for easy website and database recovery.
----
-
-### ✅ SSH Accessibility Checker
-**Script:** `ssh_checks`
-Verifies SSH key-based root access to a specified server, timing out after 5 seconds. Returns success or failure status without making any changes on the server. Integrates seamlessly with deploy_to_servers.sh for automated multi-server checks.
----
-
-### ✅ SSH Key Injector
-**Script:** `ssh_injection`
-Uses the RunCloud API to inject your SSH public key into a specified server, enabling passwordless root access. Takes server IP, ID, and name as arguments; verifies success from the API response; and provides helpful error messages if the server ID is invalid or the key label already exists.
 ---
 
 ## 🛠 Running Scripts
