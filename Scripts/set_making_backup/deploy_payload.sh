@@ -235,15 +235,25 @@ main() {
       *) OUT="${APP}_${DATE}.tar.gz" ;;
     esac
 
-    echo "📤 Streaming tar directly to Vultr with rclone..."
-    if tar -czf - -C "$TMP" . | timeout 1h rclone rcat "vultr:$VULTR_BUCKET/$APP/$MODE/$OUT" >> /tmp/backup_debug.log 2>&1; then
-      log_debug "✅ Streaming backup and upload successful for $APP"
-      echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Streaming backup successful for $APP" >> /root/backup_success.log
-      rm -rf "$TMP"
-    else
-      log_debug "❌ Streaming backup failed for $APP (see /tmp/backup_debug.log for details)"
-      error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Streaming backup failed for $APP on server $SERVER_IP"
-    fi
+    # --- upload backup ----
+    MAX_STREAM_ATTEMPTS=3
+    for stream_attempt in $(seq 1 $MAX_STREAM_ATTEMPTS); do
+      echo "📤 Attempt $stream_attempt/$MAX_STREAM_ATTEMPTS: Streaming tar directly to Vultr for $APP..."
+      if tar -czf - -C "$TMP" . | timeout 1h rclone rcat "vultr:$VULTR_BUCKET/$APP/$MODE/$OUT" >> /tmp/backup_debug.log 2>&1; then
+        log_debug "✅ Streaming backup and upload successful for $APP"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Streaming backup successful for $APP" >> /root/backup_success.log
+        rm -rf "$TMP"
+        break
+      else
+        log_debug "❌ Attempt $stream_attempt failed for $APP"
+        if [[ $stream_attempt -lt $MAX_STREAM_ATTEMPTS ]]; then
+          echo "🔁 Retrying streaming backup in 30 seconds..."
+          sleep 30
+        else
+          error_notify "❌ All $MAX_STREAM_ATTEMPTS streaming attempts failed for $APP on server $SERVER_IP"
+        fi
+      fi
+    done
 
     # --- Cleanup old backups for this app (Consider S3 Lifecycle Policies as an alternative) ---
     echo "🔍 Cleaning backups for $APP ($MODE) older than $RETENTION_DAYS days..."
