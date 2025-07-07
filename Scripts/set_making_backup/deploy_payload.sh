@@ -235,30 +235,15 @@ main() {
       *) OUT="${APP}_${DATE}.tar.gz" ;;
     esac
 
-    TAR_PATH="$BACKUP_DIR/$OUT"
-    if tar -czf "$TAR_PATH" -C "$TMP" . >> /tmp/backup_debug.log 2>&1; then
-      log_debug "✅ Archive created successfully: $OUT"
+    echo "📤 Streaming tar directly to Vultr with rclone..."
+    if tar -czf - -C "$TMP" . | timeout 1h rclone rcat "vultr:$VULTR_BUCKET/$APP/$MODE/$OUT" >> /tmp/backup_debug.log 2>&1; then
+      log_debug "✅ Streaming backup and upload successful for $APP"
+      echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Streaming backup successful for $APP" >> /root/backup_success.log
+      rm -rf "$TMP"
     else
-      log_debug "❌ tar failed for $APP (see /tmp/backup_debug.log for details)"
-      error_notify "❌ Failed to create archive $OUT for $APP on server $SERVER_IP"
-      continue
+      log_debug "❌ Streaming backup failed for $APP (see /tmp/backup_debug.log for details)"
+      error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Streaming backup failed for $APP on server $SERVER_IP"
     fi
-
-   # --- Upload to Vultr using rclone ---
-   if [ -f "$TAR_PATH" ]; then
-     echo "📤 Uploading $TAR_PATH to Vultr with rclone..."
-     log_debug "📤 Uploading $TAR_PATH to Vultr..."
-     if timeout 1h rclone copy "$TAR_PATH" "vultr:$VULTR_BUCKET/$APP/$MODE/" -P >> /tmp/backup_debug.log 2>&1; then
-       log_debug "✅ Upload successful for $APP"
-       echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Backup and upload successful for $APP" >> /root/backup_success.log
-       rm -rf "$TMP" "$TAR_PATH"
-     else
-       log_debug "❌ Upload failed or timed out for $APP (see /tmp/backup_debug.log for details)"
-       error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Upload failed for $APP using rclone on server $SERVER_IP"
-     fi
-   else
-     error_notify "❌ $(date '+%Y-%m-%d %H:%M:%S') Backup file not found for $APP (expected at $TAR_PATH)"
-   fi
 
     # --- Cleanup old backups for this app (Consider S3 Lifecycle Policies as an alternative) ---
     echo "🔍 Cleaning backups for $APP ($MODE) older than $RETENTION_DAYS days..."
