@@ -255,12 +255,12 @@ main() {
       fi
     done
 
-    # --- Cleanup old backups for this app (Consider S3 Lifecycle Policies as an alternative) ---
+    # --- Cleanup old backups based on upload date ---
     echo "🔍 Cleaning backups for $APP ($MODE) older than $RETENTION_DAYS days..."
-    rclone lsl "vultr:$VULTR_BUCKET/$APP/$MODE/" | while read -r SIZE DATE TIME FILENAME; do
+    rclone lsl "vultr:$VULTR_BUCKET/$APP/$MODE/" | awk '{print $2, $3, substr($0, index($0,$4))}' | while read -r DATE TIME FILENAME; do
       FILE_TIMESTAMP=$(date -d "$DATE $TIME" +%s || echo 0)
       if [ "$FILE_TIMESTAMP" -lt "$CUTOFF_DATE" ]; then
-        echo "🗑️ Deleting old backup: $FILENAME (last modified: $DATE $TIME)"
+        echo "🗑️ Deleting old backup: $FILENAME (uploaded: $DATE $TIME)"
         rclone delete "vultr:$VULTR_BUCKET/$APP/$MODE/$FILENAME"
       fi
     done
