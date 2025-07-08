@@ -1,6 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+
 
 # ------------------- CONFIG -------------------
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$ROOT_DIR/../../utils.sh"
 load_env
 EMAIL_FROM=$NOTIFY_EMAIL
 ROOT_DIR="/tmp"  # or any path you want to store servers.json
@@ -68,8 +72,8 @@ send_summary_email() {
 
 
 # ------------------- MAIN -------------------
-vultr_json=$(fetch_vultr_servers)
-runcloud_json=$(fetch_all_runcloud_servers2)
+vultr_json=$(fetch_all_vultr_servers)
+runcloud_json=$(fetch_all_runcloud_servers)
 
 echo "🔍 Comparing Vultr and RunCloud servers..."
 missing_json=$(compare_servers "$runcloud_json" "$vultr_json")

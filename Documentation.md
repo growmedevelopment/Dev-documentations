@@ -9,6 +9,8 @@ This suite of Bash scripts automates monitoring, backup, and maintenance for ser
 
 ## 📦 Script Summaries
 
+###  Dependent scripts (run only via runner)
+
 ### ✅ Server Uptime Monitoring
 **Script:** `ping_report.sh`
 Automates daily pings of all Vultr servers fetched via API, generating and emailing an HTML uptime report. Includes deployment helper scripts to upload credentials, install the monitor on a remote server, and configure a daily cron job. Outputs logs to `/var/log/ping_debug.log`.
@@ -63,6 +65,26 @@ Uses the RunCloud API to inject your SSH public key into a specified server, ena
 **Script:** `create_wp_temp_folder`
 Scans all WordPress apps under /home/runcloud/webapps on a server, ensures the WP_TEMP_DIR is defined in wp-config.php, and creates the /wp-content/temp/ directory if missing. Prevents the “Missing a Temporary Folder” WordPress error during uploads or updates.
 ---
+
+
+###  Independent scripts (run directly)
+
+### ✅ Vultr vs RunCloud Server Sync Checker
+**Script:** `check_missing_servers`
+Fetches all active servers from both Vultr and RunCloud APIs, compares them by IP address, and identifies servers that exist in Vultr but not in RunCloud. If discrepancies are found, generates and sends an HTML summary email to NOTIFY_EMAIL listing the unmatched servers.
+---
+
+### ✅ Remote Ping Monitor Deployer
+**Script:** `ping_report.sh`
+This script sets up a simple monitoring system on a remote server. Once installed, the server will automatically check every day if your Vultr-hosted servers are online. It sends you an easy-to-read email report showing which servers are up, down, and how fast they respond. The setup is automatic — it installs what’s needed, saves your access token securely, and runs every night without you having to log in again.
+---
+
+### ✅ Old Backup Cleaner
+**Script:** `remove_old_backups`
+This script helps keep your backup storage tidy. It checks which websites still exist and compares them to the folders in your Vultr backup storage. If it finds backups for websites that no longer exist, it marks them as “orphaned” and removes them. It also clears out old daily and weekly backups for active sites, keeping only the latest ones. You can run it in safe “dry run” mode to preview what it would delete — no surprises.
+⚠️ Note: Use this script no more than once per week to avoid hitting API rate limits.
+---
+
 
 
 ## 🚀 Quick Start
