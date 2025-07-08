@@ -2,7 +2,9 @@
 
 ## 📝 Overview
 
-This suite of Bash scripts automates monitoring, backup, and maintenance for servers managed via RunCloud + Vultr. Scripts handle uptime checks, orphaned server detection, backups, disk extensions, and cron cleanups.
+This suite of Bash scripts automates monitoring, backup, and maintenance for servers managed via RunCloud + Vultr. Scripts handle uptime checks, orphaned server detection, backups, disk extensions, and cron cleanups. 
+
+**⚠️ Note: These scripts are prepared for iOS/Linux environment if you are Windows user read `Windows_users_documentation.md`**
 
 ---
 
