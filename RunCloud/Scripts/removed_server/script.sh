@@ -2,7 +2,7 @@
 
 # ------------------- CONFIG -------------------
 load_env
-EMAIL_FROM="noreply@yourdomain.com"
+EMAIL_FROM=$NOTIFY_EMAIL
 ROOT_DIR="/tmp"  # or any path you want to store servers.json
 
 

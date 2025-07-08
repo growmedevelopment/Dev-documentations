@@ -59,6 +59,11 @@ Verifies SSH key-based root access to a specified server, timing out after 5 sec
 Uses the RunCloud API to inject your SSH public key into a specified server, enabling passwordless root access. Takes server IP, ID, and name as arguments; verifies success from the API response; and provides helpful error messages if the server ID is invalid or the key label already exists.
 ---
 
+### ✅ WP Temp Folder Fixer
+**Script:** `create_wp_temp_folder`
+Scans all WordPress apps under /home/runcloud/webapps on a server, ensures the WP_TEMP_DIR is defined in wp-config.php, and creates the /wp-content/temp/ directory if missing. Prevents the “Missing a Temporary Folder” WordPress error during uploads or updates.
+---
+
 
 ## 🚀 Quick Start
 
@@ -138,6 +143,7 @@ Replace `<script_folder>` with the folder name of the script you want to run. Fo
 ./deploy_to_servers.sh set_making_backup
 ./deploy_to_servers.sh remove_old_backups
 ./deploy_to_servers.sh remove_cron_user
+./deploy_to_servers.sh create_wp_temp_folder
 ```
 
 ✅ Need help?
