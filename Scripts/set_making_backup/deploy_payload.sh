@@ -37,6 +37,15 @@ DEBIAN_FRONTEND=noninteractive apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip mailutils libsasl2-modules
 
 
+# === 1.1 Ensure 'at' command is installed and enabled ===
+echo "⏳ Checking for 'at' command..."
+if ! command -v at >/dev/null 2>&1; then
+  echo "📦 Installing 'at' and enabling service..."
+  apt-get install -y at && systemctl enable --now atd
+else
+  echo "✅ 'at' command already installed."
+fi
+
 # === 2. Install and Configure rclone for Vultr Object Storage ===
 echo "⚙️ Installing and configuring rclone for Vultr..."
 
@@ -158,7 +167,12 @@ error_notify() {
 
 trap 'error_notify "Unexpected script error at line $LINENO"' ERR
 
-
+success_notify() {
+  local MSG="$1"
+  log_debug "📧 ADMIN_EMAIL is: $ADMIN_EMAIL"
+  log_debug "✅ success_notify() triggered with message: $MSG"
+  echo "$MSG" | mail -s "✅ FULL BACKUP SUCCESS - $(hostname)" "$ADMIN_EMAIL"
+}
 
 
 # --- Ensure 'mail' is installed ---
@@ -177,7 +191,7 @@ fi
 
 main() {
   MODE="${1:-daily}"
-
+  local any_success=0
   WEBAPPS_DIR="/home/runcloud/webapps"
   BACKUP_DIR="/home/runcloud/backups/$MODE"
   VULTR_BUCKET="runcloud-app-backups"
@@ -240,6 +254,7 @@ main() {
     for stream_attempt in $(seq 1 $MAX_STREAM_ATTEMPTS); do
       echo "📤 Attempt $stream_attempt/$MAX_STREAM_ATTEMPTS: Streaming tar directly to Vultr for $APP..."
       if tar -czf - -C "$TMP" . | timeout 1h rclone rcat "vultr:$VULTR_BUCKET/$APP/$MODE/$OUT" >> /tmp/backup_debug.log 2>&1; then
+        any_success=1
         log_debug "✅ Streaming backup and upload successful for $APP"
         echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Streaming backup successful for $APP" >> /root/backup_success.log
         rm -rf "$TMP"
@@ -270,6 +285,12 @@ main() {
   find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +$RETENTION_DAYS -exec rm {} \;
 
   echo "✅ Backup script finished for mode: $MODE"
+
+  if [[ "$any_success" -eq 1 ]]; then
+      return 0
+    else
+      return 1
+    fi
 }
 
 
@@ -287,8 +308,10 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
       echo "⚠️ Backup attempt $attempt failed. Retrying in $((RETRY_DELAY/60)) minutes..."
       sleep $RETRY_DELAY
     else
-      echo "❌ Backup failed after $MAX_RETRIES attempts."
-      error_notify "❌ Backup script failed after $MAX_RETRIES attempts on $(hostname) at $(date)"
+      echo "❌ Backup failed after $MAX_RETRIES attempts. Scheduling final retry in 3 hours..."
+      error_notify "❌ Backup script failed after $MAX_RETRIES attempts on $(hostname) at $(date). A final retry will be attempted in 3 hours."
+
+      echo "sleep 10800 && /root/full_vultr_backup.sh \"$1\" && [ \$? -eq 0 ] && echo \"✅ Delayed backup succeeded for mode: $1 on server $(hostname) at \$(date)\" | mail -s \"✅ FULL BACKUP SUCCESS (Delayed) - $(hostname)\" $ADMIN_EMAIL" | at now
       exit 1
     fi
   done
