@@ -19,6 +19,18 @@ This script already includes checks for low disk space, automatic installation o
 - AWS CLI installed: `sudo apt install awscli`
 - Access to Vultr Object Storage (bucket, access key, secret key, endpoint)
 
+
+🔁 ⏱️ Additional Final Retry (After Failure)
+
+If the backup script fails after 3 consecutive attempts, it will automatically:
+•	Schedule one final backup attempt 3 hours later
+•	This delayed attempt runs in the background using the at command
+•	You will receive an email notification about the success or failure of this retry
+
+💡 This ensures backup reliability even if temporary server issues (like connectivity or disk I/O delays) occur during the scheduled time.
+
+No manual intervention is needed.
+
 ---
 
 ### 🛠️ Step-by-Step Setup
