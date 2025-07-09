@@ -130,7 +130,28 @@ else
   echo "Mail log permissions and ownership are already correct."
 fi
 
+# === 3.1. Deploy Automated Backup Script in 3 hours after server returned fail ===
+cat <<'EOS' > /root/delayed_retry.sh
+#!/bin/bash
+set -euo pipefail
 
+SERVER_IP="SERVER_IP_PLACEHOLDER"
+MODE="${1:-daily}"
+ADMIN_EMAIL="BACKUP_ADMIN_EMAIL_PLACEHOLDER"
+
+if /root/full_vultr_backup.sh "$MODE"; then
+  echo "✅ Delayed backup succeeded for mode: $MODE on server $SERVER_IP at $(date)" \
+    | mail -s "✅ FULL BACKUP SUCCESS (Delayed) - $SERVER_IP" "$ADMIN_EMAIL"
+else
+  echo "❌ Delayed backup failed again for mode: $MODE on server $SERVER_IP at $(date)" \
+    | mail -s "❌ FULL BACKUP FAILED AGAIN (Delayed) - $SERVER_IP" "$ADMIN_EMAIL"
+fi
+EOS
+
+chmod +x /root/delayed_retry.sh
+
+sed -i "s|SERVER_IP_PLACEHOLDER|${TARGET_IP}|" /root/delayed_retry.sh
+sed -i "s|BACKUP_ADMIN_EMAIL_PLACEHOLDER|${BACKUP_ADMIN_EMAIL:-development@growme.ca}|" /root/delayed_retry.sh
 
 # === 4. Deploy Automated Backup Script ===
 echo "📜 Deploying automated backup script to /root/full_vultr_backup.sh..."
@@ -311,7 +332,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
       echo "❌ Backup failed after $MAX_RETRIES attempts. Scheduling final retry in 3 hours..."
       error_notify "❌ Backup script failed after $MAX_RETRIES attempts on $(hostname) at $(date). A final retry will be attempted in 3 hours."
 
-      echo "sleep 10800 && /root/full_vultr_backup.sh \"$1\" && [ \$? -eq 0 ] && echo \"✅ Delayed backup succeeded for mode: $1 on server $(hostname) at \$(date)\" | mail -s \"✅ FULL BACKUP SUCCESS (Delayed) - $(hostname)\" $ADMIN_EMAIL" | at now
+      echo "echo '/root/delayed_retry.sh \"$1\"' | at now + 3 hours" | bash
       exit 1
     fi
   done
