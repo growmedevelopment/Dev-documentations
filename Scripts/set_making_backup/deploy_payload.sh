@@ -330,7 +330,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
       sleep $RETRY_DELAY
     else
       echo "❌ Backup failed after $MAX_RETRIES attempts. Scheduling final retry in 3 hours..."
-      error_notify "❌ Backup script failed after $MAX_RETRIES attempts on $(hostname) at $(date). A final retry will be attempted in 3 hours."
+      error_notify "❌ Backup script failed after $MAX_RETRIES attempts on $SERVER_IP at $(date) for $APP. A final retry will be attempted in 3 hours."
 
       echo "echo '/root/delayed_retry.sh \"$1\"' | at now + 3 hours" | bash
       exit 1
