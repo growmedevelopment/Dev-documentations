@@ -212,11 +212,11 @@ fi
 
 main() {
   MODE="${1:-daily}"
-  local any_success=0
+  declare -A app_failed
+  declare -A app_recovered
   WEBAPPS_DIR="/home/runcloud/webapps"
   BACKUP_DIR="/home/runcloud/backups/$MODE"
   VULTR_BUCKET="runcloud-app-backups"
-  VULTR_ENDPOINT="https://sjc1.vultrobjects.com"
 
   DATE=$(date +'%Y-%m-%d')
   WEEK=$(date +'%Y-%V')
@@ -248,13 +248,15 @@ main() {
       DB_PASS=$(grep DB_PASSWORD "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
 
       if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASS" ]; then
-        error_notify "Failed to extract DB credentials from $CONFIG for $APP"
+        error_notify "❌ Failed to extract DB credentials from $CONFIG for $APP"
+        app_failed["$APP"]=1
         continue
       fi
 
       echo "🔐 Dumping database for $APP..."
       if ! mysqldump -u"$DB_USER" --password="$DB_PASS" --skip-comments "$DB_NAME" > "$TMP/db.sql" 2>> "$LOG_FILE"; then
         error_notify "❌ Database backup failed for $APP (mysqldump error) on server $SERVER_IP"
+        app_failed["$APP"]=1
         continue
       fi
     fi
@@ -270,26 +272,36 @@ main() {
       *) OUT="${APP}_${DATE}.tar.gz" ;;
     esac
 
-    # --- upload backup ----
+    # --- Upload backup ---
     MAX_STREAM_ATTEMPTS=3
+    uploaded=0
     for stream_attempt in $(seq 1 $MAX_STREAM_ATTEMPTS); do
       echo "📤 Attempt $stream_attempt/$MAX_STREAM_ATTEMPTS: Streaming tar directly to Vultr for $APP..."
       if tar -czf - -C "$TMP" . | timeout 1h rclone rcat "vultr:$VULTR_BUCKET/$APP/$MODE/$OUT" >> /tmp/backup_debug.log 2>&1; then
-        any_success=1
         log_debug "✅ Streaming backup and upload successful for $APP"
         echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ Streaming backup successful for $APP" >> /root/backup_success.log
         rm -rf "$TMP"
+        uploaded=1
+
+        if [[ ${app_failed["$APP"]+exists} ]]; then
+          success_notify "✅ Backup succeeded after retry for $APP on server $SERVER_IP at $(date)"
+          app_recovered["$APP"]=1
+          unset app_failed["$APP"]
+        fi
         break
       else
         log_debug "❌ Attempt $stream_attempt failed for $APP"
         if [[ $stream_attempt -lt $MAX_STREAM_ATTEMPTS ]]; then
           echo "🔁 Retrying streaming backup in 30 seconds..."
           sleep 30
-        else
-          error_notify "❌ All $MAX_STREAM_ATTEMPTS streaming attempts failed for $APP on server $SERVER_IP"
         fi
       fi
     done
+
+    if [[ $uploaded -eq 0 ]]; then
+      error_notify "❌ All $MAX_STREAM_ATTEMPTS streaming attempts failed for $APP on server $SERVER_IP"
+      app_failed["$APP"]=1
+    fi
 
     # --- Cleanup old backups based on upload date ---
     echo "🔍 Cleaning backups for $APP ($MODE) older than $RETENTION_DAYS days..."
@@ -307,11 +319,11 @@ main() {
 
   echo "✅ Backup script finished for mode: $MODE"
 
-  if [[ "$any_success" -eq 1 ]]; then
-      return 0
-    else
-      return 1
-    fi
+  if [[ ${#app_failed[@]} -gt 0 ]]; then
+    return 1
+  else
+    return 0
+  fi
 }
 
 
