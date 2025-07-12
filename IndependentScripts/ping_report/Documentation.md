@@ -79,3 +79,7 @@ If you skip this, the API requests from your server will fail with 403 Forbidden
 - Local script only needs to run when you update deployment settings (e.g., change `NOTIFY_EMAIL` or redeploy).
 
 ---
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

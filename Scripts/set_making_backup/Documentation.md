@@ -196,3 +196,7 @@ Follow the on-screen prompts to:
 - Select a backup date
 - Choose the app to restore
 - Complete file and database restoration
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

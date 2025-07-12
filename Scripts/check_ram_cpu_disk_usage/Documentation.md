@@ -86,3 +86,8 @@ Color indicators:
 
 - Root SSH access must be available and passwordless (`BatchMode=yes` is used).
 - The script times out SSH connections after 30 seconds to avoid hanging.
+
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

@@ -32,3 +32,6 @@ remove_cron_user/
 
 ---
 
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

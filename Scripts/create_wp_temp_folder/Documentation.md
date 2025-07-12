@@ -16,3 +16,7 @@ This script ensures all WordPress applications hosted under `/home/runcloud/weba
 
 - (Optional enhancement) Ensures the `/wp-content/temp/` directory exists
 
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

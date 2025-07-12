@@ -24,3 +24,7 @@ This script automatically detects **servers that still exist in Vultr but no lon
 
 > **Why use it?**  
 > Keep your infrastructure clean and costs under control by identifying servers running in Vultr that are no longer managed in RunCloud.
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

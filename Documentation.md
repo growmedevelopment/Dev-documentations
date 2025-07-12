@@ -87,6 +87,10 @@ This script helps keep your backup storage tidy. It checks which websites still 
 ⚠️ Note: Use this script no more than once per week to avoid hitting API rate limits.
 ---
 
+### ✅ Timezone Enforcer for Remote Servers
+**Script:** `set_time_zone`  
+This script ensures all remote servers use the correct timezone (`America/Edmonton`) and are time-synced via NTP. When run, it connects over SSH to each server, checks the current timezone, and only updates it if necessary. It also enables NTP time synchronization to prevent drift. Designed to be used with `deploy_to_servers.sh`, this automation scales across dozens or hundreds of servers and ensures consistent time-based behavior for backups, cron jobs, and logs.
+---
 
 
 ## 🚀 Quick Start
@@ -168,6 +172,7 @@ Replace `<script_folder>` with the folder name of the script you want to run. Fo
 ./deploy_to_servers.sh remove_old_backups
 ./deploy_to_servers.sh remove_cron_user
 ./deploy_to_servers.sh create_wp_temp_folder
+./deploy_to_servers.sh set_time_zone
 ```
 
 ✅ Need help?
@@ -176,3 +181,11 @@ Run:
 ```bash
 ./deploy_to_servers.sh --help
 ```
+
+
+
+---
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

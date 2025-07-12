@@ -38,3 +38,10 @@ You must provide these in a `.env` file two directories above your script (or ad
 AWS_ACCESS_KEY_ID=YOUR_VULTR_KEY
 AWS_SECRET_ACCESS_KEY=YOUR_VULTR_SECRET
 API_KEY=YOUR_RUNCLOUD_API_KEY
+```
+
+---
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

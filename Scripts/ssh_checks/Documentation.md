@@ -52,3 +52,7 @@ Or manually for a single server:
 - No changes are made to the server
 - Safe to run repeatedly
 - Designed for integration with `deploy_to_servers.sh`
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

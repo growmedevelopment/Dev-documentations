@@ -29,3 +29,7 @@ This script connects to a remote Linux server over SSH and performs automated di
 - SSH access with root privileges and no password prompt (key-based auth recommended).
 
 ---
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

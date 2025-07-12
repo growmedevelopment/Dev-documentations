@@ -66,3 +66,7 @@ This will allow you to:
 - Install software packages
 - Set up cron jobs
 - Configure system-level scripts and services
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

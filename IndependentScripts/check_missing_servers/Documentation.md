@@ -51,3 +51,7 @@ The script sends a formatted HTML email like the one below:
 
 ---
 
+
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko

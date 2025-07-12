@@ -70,3 +70,7 @@ Or run with bash explicitly:
 
 ---
 
+## 📬 Author
+
+GrowME DevOps – Dmytro Kovalenko
+
