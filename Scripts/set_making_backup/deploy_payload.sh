@@ -163,6 +163,7 @@ set -euo pipefail
 # This will be replaced by a sed command later.
 ADMIN_EMAIL="BACKUP_ADMIN_EMAIL_PLACEHOLDER"
 SERVER_IP="SERVER_IP_PLACEHOLDER"
+CURRENT_APP=""
 
 MIN_FREE_SPACE_MB=2048
 DISK_PATH="/"
@@ -186,7 +187,7 @@ error_notify() {
   fi
 }
 
-trap 'error_notify "Unexpected script error at line $LINENO"' ERR
+trap 'error_notify "Unexpected script error at line $LINENO for $CURRENT_APP"' ERR
 
 success_notify() {
   local MSG="$1"
@@ -194,7 +195,6 @@ success_notify() {
   log_debug "✅ success_notify() triggered with message: $MSG"
   echo "$MSG" | mail -s "✅ FULL BACKUP SUCCESS - $(hostname)" "$ADMIN_EMAIL"
 }
-
 
 # --- Ensure 'mail' is installed ---
 if ! command -v mail >/dev/null 2>&1; then
@@ -237,6 +237,7 @@ main() {
   for APP_PATH in "$WEBAPPS_DIR"/*; do
     [ -d "$APP_PATH" ] || continue
     APP=$(basename "$APP_PATH")
+    CURRENT_APP="$APP"
     CONFIG="$APP_PATH/wp-config.php"
     TMP="/tmp/${APP}_${MODE}_backup"
     mkdir -p "$TMP"
@@ -326,7 +327,6 @@ main() {
   fi
 }
 
-
 # === Retry Logic for Entire Backup Script ===
 MAX_RETRIES=3
 RETRY_DELAY=3600  # 1 hour in seconds
@@ -335,14 +335,14 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   for attempt in $(seq 1 $MAX_RETRIES); do
     echo "🔁 Running backup attempt $attempt/$MAX_RETRIES at $(date)"
     if main "$@"; then
-      echo "✅ Backup succeeded on attempt $attempt"
+      success_notify "✅ Full backup succeeded on server $SERVER_IP at $(date) for $CURRENT_APP."
       exit 0
     elif [[ $attempt -lt $MAX_RETRIES ]]; then
       echo "⚠️ Backup attempt $attempt failed. Retrying in $((RETRY_DELAY/60)) minutes..."
       sleep $RETRY_DELAY
     else
       echo "❌ Backup failed after $MAX_RETRIES attempts. Scheduling final retry in 3 hours..."
-      error_notify "❌ Backup script failed after $MAX_RETRIES attempts on $SERVER_IP at $(date) for $APP. A final retry will be attempted in 3 hours."
+      error_notify "❌ Backup script failed after $MAX_RETRIES attempts on $SERVER_IP at $(date) for $CURRENT_APP. A final retry will be attempted in 3 hours."
 
       echo "echo '/root/delayed_retry.sh \"$1\"' | at now + 3 hours" | bash
       exit 1
