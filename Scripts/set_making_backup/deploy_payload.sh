@@ -511,4 +511,57 @@ EOS
 chmod +x /root/restore-backup.sh
 echo "✅ Interactive restore tool 'restore-backup' is now available."
 
+
+# === 7. Configure Log Rotation for Backup Logs ===
+echo "🔁 Configuring log rotation for backup logs..."
+
+# Ensure logrotate is installed
+apt-get install -y -qq logrotate
+
+# Define the list of log files
+log_files=(
+  "/root/backup_daily.log"
+  "/root/backup_failure.log"
+  "/root/backup_success.log"
+  "/root/backup_upload.log"
+  "/root/backup_weekly.log"
+  "/tmp/backup_debug.log"
+  "/tmp/mail_error.log"
+)
+
+# Filter only existing log files
+existing_logs=()
+for file in "${log_files[@]}"; do
+  if [[ -f "$file" ]]; then
+    existing_logs+=("$file")
+  fi
+done
+
+# Only create logrotate config if at least one file exists
+if [[ ${#existing_logs[@]} -gt 0 ]]; then
+  echo "   → Found ${#existing_logs[@]} log files. Writing logrotate config..."
+  {
+    for f in "${existing_logs[@]}"; do
+      echo "$f"
+    done
+    cat <<'EOF'
+{
+    weekly
+    rotate 1
+    compress
+    missingok
+    notifempty
+    create 0640 root root
+}
+EOF
+  } > /etc/logrotate.d/vultr-backups
+
+  chmod 0644 /etc/logrotate.d/vultr-backups
+  logrotate -f /etc/logrotate.d/vultr-backups || echo "⚠️  Logrotate failed to run."
+  echo "✅ Log rotation configured for backup logs."
+else
+  echo "ℹ️ No backup log files found. Skipping logrotate configuration."
+fi
+
+
 echo "🎉 All configuration complete on $(hostname)"
