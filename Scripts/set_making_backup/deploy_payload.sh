@@ -209,11 +209,11 @@ if [ "$AVAILABLE_MB" -lt "$MIN_FREE_SPACE_MB" ]; then
   error_notify "Low disk space on $SERVER_IP: ${AVAILABLE_MB}MB available (required: ${MIN_FREE_SPACE_MB}MB)."
   exit 1
 fi
+declare -A app_failed=()
+declare -A app_recovered=()
 
 main() {
   MODE="${1:-daily}"
-  declare -A app_failed
-  declare -A app_recovered
   WEBAPPS_DIR="/home/runcloud/webapps"
   BACKUP_DIR="/home/runcloud/backups/$MODE"
   VULTR_BUCKET="runcloud-app-backups"
@@ -335,7 +335,10 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   for attempt in $(seq 1 $MAX_RETRIES); do
     echo "🔁 Running backup attempt $attempt/$MAX_RETRIES at $(date)"
     if main "$@"; then
-      success_notify "✅ Full backup succeeded on server $SERVER_IP at $(date) for $CURRENT_APP."
+      # Only notify if this is not the first attempt (i.e. succeeded after retry)
+      if [[ $attempt -gt 1 ]]; then
+        success_notify "✅ Full backup succeeded on server $SERVER_IP at $(date) after retry for $CURRENT_APP."
+      fi
       exit 0
     elif [[ $attempt -lt $MAX_RETRIES ]]; then
       echo "⚠️ Backup attempt $attempt failed. Retrying in $((RETRY_DELAY/60)) minutes..."
@@ -551,7 +554,7 @@ if [[ ${#existing_logs[@]} -gt 0 ]]; then
     compress
     missingok
     notifempty
-    create 0640 root root
+    su root root
 }
 EOF
   } > /etc/logrotate.d/vultr-backups
