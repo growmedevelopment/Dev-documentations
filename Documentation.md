@@ -71,6 +71,11 @@ Scans all WordPress apps under /home/runcloud/webapps on a server, ensures the W
 
 ###  Independent scripts (run directly)
 
+### ✅ Vultr Cost Summary
+**Script:** `vultr_cost_tracker`
+This script fetches all active VPS instances from Vultr, calculates the total hourly cost, and estimates monthly costs assuming 30-day uptime. It then sends a clean, formatted HTML summary by email. Great for keeping track of your infrastructure expenses with minimal effort.
+---
+
 ### ✅ Vultr vs RunCloud Server Sync Checker
 **Script:** `check_missing_servers`
 Fetches all active servers from both Vultr and RunCloud APIs, compares them by IP address, and identifies servers that exist in Vultr but not in RunCloud. If discrepancies are found, generates and sends an HTML summary email to NOTIFY_EMAIL listing the unmatched servers.
