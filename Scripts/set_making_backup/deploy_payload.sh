@@ -336,14 +336,12 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     echo "🔁 Running backup attempt $attempt/$MAX_RETRIES at $(date)"
     if main "$@"; then
       if [[ $attempt -gt 1 ]]; then
-        if [[ ${#app_recovered[@]} -eq 0 ]]; then
-          success_notify "✅ Full backup succeeded on server $SERVER_IP at $(date) after retry."
-        else
-          recovered_list=$(printf ", %s" "${!app_recovered[@]}")
-          recovered_list=${recovered_list:2}  # Remove leading comma and space
-          success_notify "✅ Full backup succeeded on server $SERVER_IP at $(date) after retry. Recovered apps: $recovered_list"
+          recovered_count=${#app_recovered[@]}
+          if (( recovered_count > 1 )); then
+            recovered_list=$(IFS=,; echo "${!app_recovered[@]}" | sed 's/ /, /g')
+            success_notify "✅ Full backup succeeded on server $SERVER_IP at $(date) after retry. Recovered apps: $recovered_list"
+          fi
         fi
-      fi
       exit 0
     elif [[ $attempt -lt $MAX_RETRIES ]]; then
       echo "⚠️ Backup attempt $attempt failed. Retrying in $((RETRY_DELAY/60)) minutes..."
