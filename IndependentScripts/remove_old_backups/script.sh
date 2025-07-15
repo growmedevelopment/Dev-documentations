@@ -159,24 +159,20 @@ fi
 
 echo ""
 echo "🚀 Cleaning backups for current apps..."
-for app in "${current_apps[@]}"; do
-  app_folder="${app}/"
-  weekly_path="vultr:runcloud-app-backups/${app_folder}weekly"
-  daily_path="vultr:runcloud-app-backups/${app_folder}daily"
-
+for orphan in "${orphaned_folders[@]}"; do
+  folder_name="${orphan%/}"
   echo ""
-  echo "🔨 Processing backups for app: ${app}"
+  echo "🔨 Cleaning orphaned folder: ${folder_name}"
 
-  ## --------------------------
-  ## 1) CLEAN WEEKLY FOLDER
-  ## --------------------------
+  weekly_path="vultr:runcloud-app-backups/${folder_name}/weekly"
+  daily_path="vultr:runcloud-app-backups/${folder_name}/daily"
+
+  ## WEEKLY BACKUPS
   echo "➡️ Checking weekly backups..."
   weekly_files=$(rclone lsf "$weekly_path" 2>/dev/null || true)
-
   if [[ -n "$weekly_files" ]]; then
     echo "🗑 Found weekly backups:"
     echo "$weekly_files"
-
     if [[ "$DRY_RUN" == "true" ]]; then
       echo "⚠️ [DRY_RUN] Would delete all files in $weekly_path"
     else
@@ -187,13 +183,9 @@ for app in "${current_apps[@]}"; do
     echo "✅ No weekly backups found."
   fi
 
-  ## --------------------------
-  ## 2) CLEAN DAILY FOLDER (except latest)
-  ## --------------------------
+  ## DAILY BACKUPS
   echo "➡️ Checking daily backups..."
   daily_files=$(rclone lsf "$daily_path" 2>/dev/null | sort || true)
-
-  latest_file=$(echo "$daily_files" | tail -n 1)
 
   if [[ -z "$daily_files" ]]; then
     echo "✅ No daily backups found."
@@ -201,23 +193,18 @@ for app in "${current_apps[@]}"; do
     echo "📂 Found daily backups:"
     echo "$daily_files"
 
-    old_files=$(echo "$daily_files" | grep -v "^${latest_file}$" || true)
+    # Get all but the last (most recent) file
+    mapfile -t daily_array <<< "$daily_files"
+    if (( ${#daily_array[@]} > 1 )); then
+      files_to_delete=("${daily_array[@]:0:${#daily_array[@]}-1}")
 
-    if [[ -n "$old_files" ]]; then
-      echo "🗑 Old daily backups to delete:"
-      echo "$old_files"
-
-      while IFS= read -r file; do
+      for file in "${files_to_delete[@]}"; do
         full_path="${daily_path}/${file}"
-        if [[ "$DRY_RUN" == "true" ]]; then
-          echo "⚠️ [DRY_RUN] Would delete $full_path"
-        else
-          echo "🔥 Deleting $full_path..."
-          rclone delete "$full_path"
-        fi
-      done <<< "$old_files"
+        echo "🔥 Deleting $full_path..."
+        rclone delete "$full_path"
+      done
     else
-      echo "✅ Only latest daily backup present. No old backups to delete."
+      echo "🛡 Only one daily backup exists, skipping deletion."
     fi
   fi
 done
