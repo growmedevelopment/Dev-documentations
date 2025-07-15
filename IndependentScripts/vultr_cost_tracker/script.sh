@@ -26,9 +26,9 @@ while :; do
 done
 
 server_count="${#instances[@]}"
-total_hourly=$(printf '%s\n' "${instances[@]}" | jq -s '[.[] | .billing_hourly_rate | select(. != null) | tonumber] | add')
-total_hourly="${total_hourly:-0}"
-total_monthly=$(echo "$total_hourly * 24 * 30" | bc)
+total_pending=$(printf '%s\n' "${instances[@]}" | jq -s '[.[] | .pending_charges | select(. != null) | tonumber] | add')
+total_pending="${total_pending:-0}"
+rounded_pending=$(printf "%.2f" "$total_pending")
 
 # Compose HTML report
 REPORT_FILE="/tmp/vultr_cost_summary.html"
@@ -39,8 +39,7 @@ cat <<EOF > "$REPORT_FILE"
   <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse;">
     <tr><th>Metric</th><th>Value</th></tr>
     <tr><td>Total Servers</td><td>$server_count</td></tr>
-    <tr><td>Hourly Cost</td><td>\$$total_hourly</td></tr>
-    <tr><td>Estimated Monthly Cost</td><td>\$$total_monthly</td></tr>
+    <tr><td>Pending Charges</td><td>\$$rounded_pending</td></tr>
   </table>
 </body></html>
 EOF
