@@ -239,7 +239,8 @@ main() {
     APP=$(basename "$APP_PATH")
     CURRENT_APP="$APP"
     CONFIG="$APP_PATH/wp-config.php"
-    TMP="/tmp/${APP}_${MODE}_backup"
+    TMP="/tmp/${APP}_${MODE}_backup_$(date +%s)"
+    rm -rf "$TMP"
     mkdir -p "$TMP"
 
     # --- DB Backup ---
