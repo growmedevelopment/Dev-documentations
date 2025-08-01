@@ -15,6 +15,11 @@ while :; do
   [[ -n "$cursor" ]] && url+="&cursor=$cursor"
 
   response=$(curl -sS -H "Authorization: Bearer $VULTR_API_TOKEN" "$url")
+  # Check for error in API response
+  if echo "$response" | jq -e '.status' >/dev/null; then
+    echo "❌ API Error: $(echo "$response" | jq -r '.error')"
+    exit 1
+  fi
 
   new_instances=$(echo "$response" | jq -c '.instances[]')
   while IFS= read -r inst; do
