@@ -36,6 +36,14 @@ fi
 DEBIAN_FRONTEND=noninteractive apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip mailutils libsasl2-modules
 
+# === Ensure 'jq' is installed for JSON handling ===
+echo "🔧 Checking for 'jq' (required for DB credential handling)..."
+if ! command -v jq >/dev/null 2>&1; then
+  echo "📦 Installing jq..."
+  apt-get install -y -qq jq
+else
+  echo "✅ 'jq' is already installed."
+fi
 
 # === 1.1 Ensure 'at' command is installed and enabled ===
 echo "⏳ Checking for 'at' command..."
@@ -441,12 +449,12 @@ LOCAL_ARCHIVE_PATH="${BACKUP_DIR}/${MODE}/${ARCHIVE}"
 TMP="/tmp/restore_${APP}_$(date +%s)"
 SAFETY_BACKUP_DIR="/root/pre_restore_backups"
 SAFETY_BACKUP_FILE="${SAFETY_BACKUP_DIR}/${APP}_pre-restore_$(date +%Y%m%d_%H%M%S).tar.gz"
+CREDENTIALS_JSON="/root/db_credentials_${APP}.json"
 
 # === CRITICAL: Pre-Restore Safety Backup ===
 echo "🛡️  Creating a safety backup of the current state before restoring..."
 mkdir -p "$SAFETY_BACKUP_DIR"
 if [ -d "$APP_PATH" ]; then
-  # Safety backup for database if it exists
   CONFIG="$APP_PATH/wp-config.php"
   if [ -f "$CONFIG" ]; then
     DB_NAME=$(grep "DB_NAME" "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
@@ -455,8 +463,16 @@ if [ -d "$APP_PATH" ]; then
     SAFETY_DB_BACKUP="/tmp/${DB_NAME}_pre-restore.sql"
     echo "  -> Backing up current database '$DB_NAME'..."
     mysqldump -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" > "$SAFETY_DB_BACKUP"
+
+    echo "  -> Saving DB credentials for reuse..."
+    cat <<EOF > "$CREDENTIALS_JSON"
+{
+  "db_name": "$DB_NAME",
+  "db_user": "$DB_USER",
+  "db_pass": "$DB_PASS"
+}
+EOF
   fi
-  # Create a single archive of the current files and the DB dump
   echo "  -> Archiving current files for '$APP'..."
   tar -czf "$SAFETY_BACKUP_FILE" -C "$APP_PATH" . ${SAFETY_DB_BACKUP:+-C /tmp/ $(basename $SAFETY_DB_BACKUP)}
   rm -f "$SAFETY_DB_BACKUP"
@@ -491,13 +507,26 @@ chown -R runcloud:runcloud "$APP_PATH"
 find "$APP_PATH" -type d -exec chmod 755 {} \;
 find "$APP_PATH" -type f -exec chmod 644 {} \;
 
+# === Recreate DB and User from Saved Credentials ===
+if [[ -f "$CREDENTIALS_JSON" ]]; then
+  echo "🔐 Loading saved DB credentials from $CREDENTIALS_JSON..."
+  DB_NAME=$(jq -r '.db_name' "$CREDENTIALS_JSON")
+  DB_USER=$(jq -r '.db_user' "$CREDENTIALS_JSON")
+  DB_PASS=$(jq -r '.db_pass' "$CREDENTIALS_JSON")
+
+  echo "⚙️  Recreating database and user before import..."
+  sudo mariadb -e "
+    CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`;
+    CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
+    GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost';
+    FLUSH PRIVILEGES;"
+else
+  echo "⚠️  No saved DB credentials found. Skipping DB/user creation."
+fi
+
 # === Restore Database ===
 CONFIG="$APP_PATH/wp-config.php"
 if [ -f "$CONFIG" ]; then
-  DB_NAME=$(grep "DB_NAME" "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
-  DB_USER=$(grep "DB_USER" "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
-  DB_PASS=$(grep "DB_PASSWORD" "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
-
   if [ -f "$TMP/db.sql" ]; then
     echo "🗃️  Importing database '$DB_NAME'..."
     mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$TMP/db.sql" && echo "✅ Database restored."

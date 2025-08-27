@@ -1,8 +1,12 @@
-# 📡 Server Uptime Monitoring Script (Refactored)
+# 📡 Server Uptime Monitoring Script
 
 ## Overview
 
-This system automates deployment of a cron-based monitoring script to a remote server. Every day, the server fetches the **latest list of Vultr instances**, pings each one, and sends an HTML email report showing their availability and response times.
+This system automates deployment of a cron-based monitoring script to a remote server. Every day, the server fetches the **latest list of Vultr instances**, pings each one, and sends HTML email reports.
+
+It now provides **two types of reports**:
+1. A **full uptime report** (all servers with UP/DOWN status).
+2. A **down-only alert** (sent separately if one or more servers are unreachable).
 
 ---
 
@@ -10,8 +14,9 @@ This system automates deployment of a cron-based monitoring script to a remote s
 
 - **ping_report.sh**  
   The script deployed to the remote server. It:
-    - Fetches fresh servers from Vultr API.
-    - Generates the ping report.
+    - Fetches fresh servers from the Vultr API.
+    - Generates a **full HTML uptime report**.
+    - Generates a **separate DOWN-only alert** if any servers fail.
     - Emails results.
 
 - **utils.sh**  
@@ -38,14 +43,15 @@ This system automates deployment of a cron-based monitoring script to a remote s
 
 4. **Remote Script Behavior**  
    Every time `/root/ping_report.sh` runs (manually or via cron):
-    - Fetches the current list of servers from Vultr API.
+    - Fetches the current list of servers from Vultr API (handles pagination).
     - Generates an up-to-date list of IPs.
     - Pings each IP.
-    - Creates an HTML report with:
-        - IP address
-        - Status (`UP` / `DOWN`)
-        - Ping time in milliseconds.
-    - Emails the report to `NOTIFY_EMAIL`.
+    - Creates two reports:
+        - **Full Uptime Report (all servers)**  
+          Shows IP address, status (`UP`/`DOWN`), and ping time in milliseconds.
+        - **Down-Only Report**  
+          Sent separately only if one or more servers fail, showing just those IPs marked `DOWN`.
+    - Emails the reports to `NOTIFY_EMAIL`.
 
 5. **Schedules Cron Job**  
    Configures `/etc/cron.d/ping_report` on the remote server to run the report **daily at 12:00 AM**.
@@ -61,11 +67,19 @@ If you skip this, the API requests from your server will fail with 403 Forbidden
 
 ## 💌 Output
 
-- **Email Report**  
-  Sent daily with:
-    - Server IP addresses.
-    - Status (`UP`/`DOWN`).
-    - Ping times.
+- **Email Report (always sent)**
+    - Table of all servers with:
+        - IP address
+        - Status (`UP`/`DOWN`)
+        - Ping times (ms)
+
+- **Down-Only Alert (conditionally sent)**
+    - Sent **only if at least one server is unreachable**.
+    - Contains a simplified table of only `DOWN` servers.
+    - Subject line starts with:
+      ```
+      🚨 ALERT: Servers Down - YYYY-MM-DD HH:MM
+      ```
 
 - **Log File**  
   Remote server logs each run to `/var/log/ping_debug.log` for troubleshooting.
@@ -74,9 +88,10 @@ If you skip this, the API requests from your server will fail with 403 Forbidden
 
 ## ✅ Key Advantages
 
-- No need to manually maintain or upload `servers.json` or IP lists.
-- The remote server always uses the **latest servers in your Vultr account**.
-- Local script only needs to run when you update deployment settings (e.g., change `NOTIFY_EMAIL` or redeploy).
+- **Automated discovery** — No need to manually update IP lists; the script always uses the latest servers from Vultr.
+- **Dual reporting** — Always get the full daily snapshot **plus** a separate urgent alert if something breaks.
+- **Error handling** — Failures trigger immediate error notifications with line numbers.
+- **Easy redeployment** — Just re-run `deploy_ping_report.sh` when updating configs.
 
 ---
 

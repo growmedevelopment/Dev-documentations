@@ -83,8 +83,11 @@ Fetches all active servers from both Vultr and RunCloud APIs, compares them by I
 
 ### ✅ Remote Ping Monitor Deployer
 **Script:** `ping_report.sh`
-This script sets up a simple monitoring system on a remote server. Once installed, the server will automatically check every day if your Vultr-hosted servers are online. It sends you an easy-to-read email report showing which servers are up, down, and how fast they respond. The setup is automatic — it installs what’s needed, saves your access token securely, and runs every night without you having to log in again.
----
+
+Installs a daily uptime monitor on your remote server.
+- **Full Report (daily):** All Vultr servers with status + ping times.
+- **Down-Only Alert:** Sent only if servers are unreachable.
+- Runs nightly via cron, auto-fetches server list from Vultr API, and logs to `/var/log/ping_debug.log`.
 
 ### ✅ Old Backup Cleaner
 **Script:** `remove_old_backups`
