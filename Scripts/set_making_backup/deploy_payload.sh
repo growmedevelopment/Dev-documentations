@@ -176,6 +176,7 @@ CURRENT_APP=""
 MIN_FREE_SPACE_MB=2048
 DISK_PATH="/"
 LOG_FILE="/root/backup_failure.log"
+SERVER_TAG_SAFE=$(echo "${SERVER_IP:-$(hostname -I | awk '{print $1}')}" | tr '.:/ ' '____' | tr -c '[:alnum:]_' '_')
 
 # --- Error handler ---
 log_debug() {
@@ -276,10 +277,10 @@ main() {
     cp -a "$APP_PATH/." "$TMP/files/"
 
     case "$MODE" in
-      weekly) OUT="${APP}_week-${WEEK}.tar.gz" ;;
-      monthly) OUT="${APP}_month-${MONTH}.tar.gz" ;;
-      yearly) OUT="${APP}_year-${YEAR}.tar.gz" ;;
-      *) OUT="${APP}_${DATE}.tar.gz" ;;
+     weekly)  OUT="${APP}_${SERVER_TAG_SAFE}_week-${WEEK}.tar.gz" ;;
+      monthly) OUT="${APP}_${SERVER_TAG_SAFE}_month-${MONTH}.tar.gz" ;;
+      yearly)  OUT="${APP}_${SERVER_TAG_SAFE}_year-${YEAR}.tar.gz" ;;
+      *)       OUT="${APP}_${SERVER_TAG_SAFE}_${DATE}.tar.gz" ;;
     esac
 
     # --- Upload backup ---
