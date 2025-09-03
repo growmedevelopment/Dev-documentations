@@ -405,144 +405,179 @@ chmod 0644 /etc/cron.d/vultr_backups
 echo "🔧 Deploying interactive restore tool as 'restore-backup' command..."
 # Use a quoted 'EOS' here too for consistency and safety.
 cat <<'EOS' > /root/restore-backup.sh
-#!/bin/bash
-set -euo pipefail
+#!/usr/bin/env -S bash -Eeuo pipefail
+# Restore a WP app from Vultr backups, recreating DB/user/grants exactly as in wp-config.php
 
-# === Configuration ===
+set -Eeuo pipefail
+
+# === Config ===
 WEBAPPS_DIR="/home/runcloud/webapps"
 BACKUP_DIR="/home/runcloud/backups"
 VULTR_BUCKET="runcloud-app-backups"
-VULTR_ENDPOINT="https://sjc1.vultrobjects.com"
 
-# --- Function to list available backups from Vultr ---
-list_backups() {
-  local app="$1"
-  local mode="$2"
-  rclone lsf "vultr:${VULTR_BUCKET}/${app}/${mode}/"
-}
+need_bin() { command -v "$1" >/dev/null 2>&1 || { echo "Missing $1"; exit 1; }; }
+need_bin rclone
+need_bin tar
+need_bin mysql
+need_bin jq || { echo "Installing jq..."; apt-get update -qq && apt-get install -y -qq jq; }
 
-# === User Inputs (Improved) ===
-read -p "Enter the App Name to restore: " APP
-if [[ -z "$APP" ]]; then echo "App Name cannot be empty."; exit 1; fi
+# --- Select app & mode ---
+read -rp "Enter the App Name to restore (folder under $WEBAPPS_DIR): " APP
+[[ -z "$APP" ]] && { echo "App Name cannot be empty."; exit 1; }
 
 PS3="Select the backup type: "
-select MODE in "daily" "weekly" "monthly" "yearly"; do
-  if [[ -n "$MODE" ]]; then break; else echo "Invalid choice."; fi
+select MODE in daily weekly monthly yearly; do
+  [[ -n "${MODE:-}" ]] && break || echo "Invalid choice."
 done
 
+# List available archives (new naming includes SERVER_TAG in filename)
 echo "Fetching available '$MODE' backups for '$APP'..."
-mapfile -t backups < <(list_backups "$APP" "$MODE")
-
-if [ ${#backups[@]} -eq 0 ]; then
-  echo "❌ No backups found for '$APP' of type '$MODE'. Aborting."
-  exit 1
+mapfile -t BACKUPS < <(rclone lsf "vultr:${VULTR_BUCKET}/${APP}/${MODE}/" | grep -E '\.tar\.gz$' || true)
+if (( ${#BACKUPS[@]} == 0 )); then
+  echo "❌ No backups found for '${APP}/${MODE}'."; exit 1;
 fi
 
-PS3="Select the backup to restore (or type 'q' to quit): "
-select ARCHIVE in "${backups[@]}"; do
-  if [[ "$REPLY" == "q" ]]; then echo "Aborting."; exit 0; fi
-  if [[ -n "$ARCHIVE" ]]; then break; else echo "Invalid choice."; fi
+echo "Available archives:"
+select ARCHIVE in "${BACKUPS[@]}"; do
+  [[ -n "${ARCHIVE:-}" ]] && break || echo "Invalid choice."
 done
 
-# === Setup Paths ===
+# Paths
 APP_PATH="${WEBAPPS_DIR}/${APP}"
-LOCAL_ARCHIVE_PATH="${BACKUP_DIR}/${MODE}/${ARCHIVE}"
+LOCAL_DIR="${BACKUP_DIR}/${MODE}"
+LOCAL_ARCHIVE="${LOCAL_DIR}/${ARCHIVE}"
 TMP="/tmp/restore_${APP}_$(date +%s)"
-SAFETY_BACKUP_DIR="/root/pre_restore_backups"
-SAFETY_BACKUP_FILE="${SAFETY_BACKUP_DIR}/${APP}_pre-restore_$(date +%Y%m%d_%H%M%S).tar.gz"
-CREDENTIALS_JSON="/root/db_credentials_${APP}.json"
+SAFETY_DIR="/root/pre_restore_backups"
+SAFETY_TARBALL="${SAFETY_DIR}/${APP}_pre-restore_$(date +%Y%m%d_%H%M%S).tar.gz"
+CREDS_JSON="/root/db_credentials_${APP}.json"  # snapshot for reuse/visibility
 
-# === CRITICAL: Pre-Restore Safety Backup ===
-echo "🛡️  Creating a safety backup of the current state before restoring..."
-mkdir -p "$SAFETY_BACKUP_DIR"
-if [ -d "$APP_PATH" ]; then
-  CONFIG="$APP_PATH/wp-config.php"
-  if [ -f "$CONFIG" ]; then
-    DB_NAME=$(grep "DB_NAME" "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
-    DB_USER=$(grep "DB_USER" "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
-    DB_PASS=$(grep "DB_PASSWORD" "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
-    SAFETY_DB_BACKUP="/tmp/${DB_NAME}_pre-restore.sql"
-    echo "  -> Backing up current database '$DB_NAME'..."
-    mysqldump -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" > "$SAFETY_DB_BACKUP"
+mkdir -p "$LOCAL_DIR" "$SAFETY_DIR"
 
-    echo "  -> Saving DB credentials for reuse..."
-    cat <<EOF > "$CREDENTIALS_JSON"
-{
-  "db_name": "$DB_NAME",
-  "db_user": "$DB_USER",
-  "db_pass": "$DB_PASS"
+# --- Ensure local copy of archive ---
+if [[ ! -f "$LOCAL_ARCHIVE" ]]; then
+  echo "📡 Downloading ${ARCHIVE} from Vultr..."
+  rclone copy "vultr:${VULTR_BUCKET}/${APP}/${MODE}/${ARCHIVE}" "$LOCAL_DIR/" --progress
+fi
+
+# --- Extract to TMP ---
+rm -rf "$TMP"; mkdir -p "$TMP"
+echo "📦 Extracting ${ARCHIVE}..."
+tar -xzf "$LOCAL_ARCHIVE" -C "$TMP"
+
+# --- Determine DB credentials (prefer the ones INSIDE the archive) ---
+WP_CONF_ARCHIVE="$TMP/files/wp-config.php"
+WP_CONF_LIVE="$APP_PATH/wp-config.php"
+
+extract_creds_from_wpconfig() {
+  local f="$1"
+  [[ -f "$f" ]] || return 1
+  local name user pass host
+  name=$(grep -E "define\(\s*'DB_NAME'\s*,\s*'[^']*'\s*\)" "$f" | sed -E "s/.*'DB_NAME'\s*,\s*'([^']*)'.*/\1/")
+  user=$(grep -E "define\(\s*'DB_USER'\s*,\s*'[^']*'\s*\)" "$f" | sed -E "s/.*'DB_USER'\s*,\s*'([^']*)'.*/\1/")
+  pass=$(grep -E "define\(\s*'DB_PASSWORD'\s*,\s*'[^']*'\s*\)" "$f" | sed -E "s/.*'DB_PASSWORD'\s*,\s*'([^']*)'.*/\1/")
+  host=$(grep -E "define\(\s*'DB_HOST'\s*,\s*'[^']*'\s*\)" "$f" | sed -E "s/.*'DB_HOST'\s*,\s*'([^']*)'.*/\1/")
+  [[ -n "$name" && -n "$user" && -n "$pass" ]] || return 1
+  printf '%s\n' "$name" "$user" "$pass" "${host:-localhost}"
 }
-EOF
-  fi
-  echo "  -> Archiving current files for '$APP'..."
-  tar -czf "$SAFETY_BACKUP_FILE" -C "$APP_PATH" . ${SAFETY_DB_BACKUP:+-C /tmp/ $(basename $SAFETY_DB_BACKUP)}
-  rm -f "$SAFETY_DB_BACKUP"
-  echo "✅ Safety backup created at: $SAFETY_BACKUP_FILE"
+
+DB_NAME=""; DB_USER=""; DB_PASS=""; DB_HOST="localhost"
+
+if CREDS=($(extract_creds_from_wpconfig "$WP_CONF_ARCHIVE")); then
+  DB_NAME="${CREDS[0]}"; DB_USER="${CREDS[1]}"; DB_PASS="${CREDS[2]}"; DB_HOST="${CREDS[3]}"
+  echo "🔑 Using credentials from archived wp-config.php"
+elif CREDS=($(extract_creds_from_wpconfig "$WP_CONF_LIVE")); then
+  DB_NAME="${CREDS[0]}"; DB_USER="${CREDS[1]}"; DB_PASS="${CREDS[2]}"; DB_HOST="${CREDS[3]}"
+  echo "🔑 Using credentials from LIVE wp-config.php (archive lacked one)"
 else
-  echo "⚠️  No existing application found at $APP_PATH. Skipping safety backup."
+  echo "❌ Could not extract DB credentials from wp-config.php"; exit 1
 fi
 
-# === Download From Vultr if Needed ===
-if [ ! -f "$LOCAL_ARCHIVE_PATH" ]; then
-  echo "📡 Downloading $ARCHIVE from Vultr..."
-  mkdir -p "${BACKUP_DIR}/${MODE}"
-  rclone copy "vultr:${VULTR_BUCKET}/${APP}/${MODE}/${ARCHIVE}" "$BACKUP_DIR/${MODE}/" --progress || {
-    echo "❌ Failed to download backup from Vultr."
-    exit 1
-  }
+# Persist creds snapshot
+cat > "$CREDS_JSON" <<JSON
+{"db_name":"$DB_NAME","db_user":"$DB_USER","db_pass":"$DB_PASS","db_host":"$DB_HOST"}
+JSON
+chmod 600 "$CREDS_JSON"
+
+echo "DB_NAME=$DB_NAME"
+echo "DB_USER=$DB_USER"
+echo "DB_PASS_LEN=${#DB_PASS} (masked)"
+echo "DB_HOST=$DB_HOST"
+
+# --- Safety backup of current state (files + DB) ---
+echo "🛡️ Creating safety backup of current state..."
+if [[ -d "$APP_PATH" ]]; then
+  SAFETY_DB_DUMP=""
+  if [[ -f "$WP_CONF_LIVE" ]]; then
+    # Try to dump existing DB (best-effort)
+    if mysqldump -u"$DB_USER" -p"$DB_PASS" -h"$DB_HOST" --single-transaction --quick --skip-lock-tables "$DB_NAME" > "/tmp/${DB_NAME}_pre-restore.sql" 2>/dev/null; then
+      SAFETY_DB_DUMP="/tmp/${DB_NAME}_pre-restore.sql"
+    fi
+  fi
+  tar -czf "$SAFETY_TARBALL" -C "$APP_PATH" . ${SAFETY_DB_DUMP:+-C /tmp $(basename "$SAFETY_DB_DUMP")}
+  [[ -n "$SAFETY_DB_DUMP" ]] && rm -f "$SAFETY_DB_DUMP"
+  echo "✅ Safety archive: $SAFETY_TARBALL"
+else
+  echo "ℹ️ No existing app directory; skipping safety backup."
 fi
 
-# === Extract Backup Archive ===
-echo "📦 Extracting archive..."
-rm -rf "$TMP"
-mkdir -p "$TMP"
-tar -xzf "$LOCAL_ARCHIVE_PATH" -C "$TMP"
-
-# === Restore Files ===
-echo "📁 Restoring files to $APP_PATH..."
+# --- Restore files ---
+echo "📁 Restoring files to ${APP_PATH}..."
 mkdir -p "$APP_PATH"
-rm -rf "${APP_PATH:?}"/*
+rm -rf "${APP_PATH:?}/"*
 cp -a "$TMP/files/." "$APP_PATH/"
-echo "🔒 Setting permissions..."
+
+# Permissions
+echo "🔒 Fixing permissions..."
 chown -R runcloud:runcloud "$APP_PATH"
 find "$APP_PATH" -type d -exec chmod 755 {} \;
 find "$APP_PATH" -type f -exec chmod 644 {} \;
 
-# === Recreate DB and User from Saved Credentials ===
-if [[ -f "$CREDENTIALS_JSON" ]]; then
-  echo "🔐 Loading saved DB credentials from $CREDENTIALS_JSON..."
-  DB_NAME=$(jq -r '.db_name' "$CREDENTIALS_JSON")
-  DB_USER=$(jq -r '.db_user' "$CREDENTIALS_JSON")
-  DB_PASS=$(jq -r '.db_pass' "$CREDENTIALS_JSON")
+# --- Recreate DB, user, and grants exactly as in creds ---
+# Handle both MySQL and MariaDB, and avoid unix_socket plugin issues
+sql_escape() { printf "%s" "$1" | sed "s/'/''/g"; }
 
-  echo "⚙️  Recreating database and user before import..."
-  sudo mariadb -e "
-    CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`;
-    CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
-    GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost';
-    FLUSH PRIVILEGES;"
-else
-  echo "⚠️  No saved DB credentials found. Skipping DB/user creation."
-fi
+DB_NAME_SQL=$(sql_escape "$DB_NAME")
+DB_USER_SQL=$(sql_escape "$DB_USER")
+DB_PASS_SQL=$(sql_escape "$DB_PASS")
 
-# === Restore Database ===
-CONFIG="$APP_PATH/wp-config.php"
-if [ -f "$CONFIG" ]; then
-  if [ -f "$TMP/db.sql" ]; then
-    echo "🗃️  Importing database '$DB_NAME'..."
-    mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$TMP/db.sql" && echo "✅ Database restored."
+echo "⚙️ Ensuring database exists: \`$DB_NAME\`"
+mysql -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME_SQL\`;"
+
+# Detect unix_socket plugin and user presence
+PLUGIN=$(mysql -N -e "SELECT plugin FROM mysql.user WHERE User='$DB_USER_SQL' AND Host='localhost' LIMIT 1;" 2>/dev/null || true)
+USER_EXISTS=$(mysql -N -e "SELECT COUNT(*) FROM mysql.user WHERE User='$DB_USER_SQL' AND Host='localhost';" 2>/dev/null || echo 0)
+
+if [[ "${USER_EXISTS:-0}" -gt 0 ]]; then
+  echo "👤 User exists — enforcing password auth and updating password."
+  if [[ "${PLUGIN:-}" == "unix_socket" ]]; then
+    mysql -e "ALTER USER '$DB_USER_SQL'@'localhost' IDENTIFIED WITH mysql_native_password BY '$DB_PASS_SQL';"
   else
-    echo "⚠️  No db.sql found. Files restored only."
+    mysql -e "ALTER USER '$DB_USER_SQL'@'localhost' IDENTIFIED BY '$DB_PASS_SQL';"
   fi
 else
-  echo "⚠️  wp-config.php not found. Skipping database restore."
+  echo "👤 Creating user '$DB_USER'@'localhost'."
+  mysql -e "CREATE USER '$DB_USER_SQL'@'localhost' IDENTIFIED BY '$DB_PASS_SQL';"
 fi
 
-# === Final Cleanup ===
+# Grant privileges idempotently
+echo "🔑 Granting privileges on \`$DB_NAME\`.* to '$DB_USER'@'localhost'"
+mysql -e "GRANT ALL PRIVILEGES ON \`$DB_NAME_SQL\`.* TO '$DB_USER_SQL'@'localhost'; FLUSH PRIVILEGES;"
+
+# --- Restore DB from archive if present ---
+if [[ -f "$TMP/db.sql" ]]; then
+  echo "🗃️ Importing database dump..."
+  mysql -u"$DB_USER" -p"$DB_PASS" -h"$DB_HOST" "$DB_NAME" < "$TMP/db.sql"
+  echo "✅ Database restored."
+else
+  echo "⚠️ No db.sql in archive; files restored only."
+fi
+
+# --- Cleanup ---
 rm -rf "$TMP"
-rm -f "$LOCAL_ARCHIVE_PATH"
-echo "🧹 Deleted temporary files and local archive."
-echo "✅ Restore complete for $APP from $ARCHIVE."
+# Keep the downloaded archive; remove this if you want auto-delete:
+# rm -f "$LOCAL_ARCHIVE"
+
+echo "✅ Restore complete for ${APP} (${ARCHIVE})."
 EOS
 
 chmod +x /root/restore-backup.sh
