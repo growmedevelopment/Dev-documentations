@@ -18,13 +18,16 @@ compare_servers() {
 
   local missing_json="[]"
 
-  # Iterate over Vultr servers and find those not in RunCloud by IP
-  echo "$vultr_json" | jq -c '.[]' | while read -r vultr; do
+  # Load Vultr list into array (runs in same shell)
+  mapfile -t vultr_list < <(echo "$vultr_json" | jq -c '.[]')
+
+  for vultr in "${vultr_list[@]}"; do
     vultr_ip=$(echo "$vultr" | jq -r '.ipAddress')
-    # Search for matching IP in RunCloud JSON
+
     found=$(echo "$runcloud_json" | jq --arg ip "$vultr_ip" '[.[] | select(.ipAddress == $ip)] | length')
+
     if [[ "$found" -eq 0 ]]; then
-      missing_json=$(echo "$missing_json" | jq --argjson item "$vultr" '. += [$item]')
+      missing_json=$(jq --argjson item "$vultr" '. += [$item]' <<< "$missing_json")
     fi
   done
 

@@ -254,9 +254,9 @@ main() {
 
     # --- DB Backup ---
     if [ -f "$CONFIG" ]; then
-      DB_NAME=$(grep DB_NAME "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
-      DB_USER=$(grep DB_USER "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
-      DB_PASS=$(grep DB_PASSWORD "$CONFIG" | sed -E "s/.*['\"](.*)['\"].*/\1/")
+      DB_NAME=$(grep -E "define\s*\(\s*'DB_NAME'" "$CONFIG" | sed -E "s/.*'DB_NAME'\s*,\s*'([^']+)'.*/\1/")
+      DB_USER=$(grep -E "define\s*\(\s*'DB_USER'" "$CONFIG" | sed -E "s/.*'DB_USER'\s*,\s*'([^']+)'.*/\1/")
+      DB_PASS=$(grep -E "define\s*\(\s*'DB_PASSWORD'" "$CONFIG" | sed -E "s/.*'DB_PASSWORD'\s*,\s*'([^']+)'.*/\1/")
 
       if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASS" ]; then
         error_notify "❌ Failed to extract DB credentials from $CONFIG for $APP"

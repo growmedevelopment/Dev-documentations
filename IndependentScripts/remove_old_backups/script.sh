@@ -80,7 +80,7 @@ fetch_apps_for_given_servers() {
         --header "Authorization: Bearer $RUNCLOUD_API_TOKEN" --header "Accept: application/json")
 
       if ! echo "$response" | jq -e '.data' >/dev/null 2>&1; then
-        echo "⚠️ Failed to fetch apps for server $server_id page $page. Skipping."
+        echo "⚠️ Failed to fetch apps for server $server_id page $page. Skipping." >&2
         break
       fi
 
